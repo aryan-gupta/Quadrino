@@ -45,6 +45,9 @@ uint8_t I2CReadNACK() {
 }
 
 uint8_t I2CGetStatus() {
+	// There was error checking
+	// but got removed for speed reasons
+	// the time saveings were about 50us
     uint8_t status = TWSR & 0b11111000; // strip prescaler bits
     return status;
 }

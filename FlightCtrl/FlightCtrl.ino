@@ -1,4 +1,6 @@
-#include <Wire.h>
+// By using out own wire library, I cut down the communication
+// time by almost 130us
+// #include <Wire.h>
 
 // https://www.youtube.com/watch?v=IdL0_ZJ7V2s
 
@@ -8,9 +10,85 @@ bool ch1, ch2, ch3, ch4;
 int recv_ch1, recv_ch2, recv_ch3, recv_ch4;
 uint16_t timer1, timer2, timer3, timer4;
 
+uint16_t escfr, escfl, escbr, escbl;
+
+uint16_t *escodr[4];
+
 float gxo, gyo, gzo;
 float ax, ay, az;
 float gx, gy, gz;
+
+void I2CStart() {
+	// Clear INT bit, Start the com, and enable the I2CInit
+	// The TWEN is only there because we are using = and not |=
+	static const uint8_t CTRL = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN);
+    TWCR = CTRL;
+	// Wait for the hardware to set the INT bit (sent start bit)
+    while ((TWCR & (1 << TWINT)) == 0);
+}
+
+void I2CStop() {
+	static const uint8_t CTRL = (1 << TWINT) | (1 << TWSTO) | (1 << TWEN);
+    TWCR = CTRL;
+}
+
+void I2CWrite(uint8_t u8data) {
+	static const uint8_t CTRL = (1 << TWINT) | (1 << TWEN);
+    TWDR = u8data;
+    TWCR = CTRL;
+    while ((TWCR & (1 << TWINT)) == 0);
+}
+
+uint8_t I2CReadACK() {
+	// Set ack (TWEA) bit on
+	static const uint8_t CTRL = (1 << TWINT) | (1 << TWEN) | (1 << TWEA);
+    TWCR = CTRL;
+    while ((TWCR & (1 << TWINT)) == 0);
+    return TWDR;
+}
+
+uint8_t I2CReadNACK() {
+	static const uint8_t CTRL = (1 << TWINT) | (1 << TWEN);
+    TWCR = CTRL;
+    while ((TWCR & (1 << TWINT)) == 0);
+    return TWDR;
+}
+
+void I2CWriteReg(uint8_t addr, uint8_t reg, uint8_t data) {
+	I2CStart();
+	I2CWrite((addr << 1) | 0);
+	I2CWrite(reg);
+	I2CWrite(data);
+	I2CStop();
+}
+
+void I2CReadReg(uint8_t addr, uint8_t reg, uint8_t *data) {
+	I2CStart();
+	I2CWrite((addr << 1) | 0);
+	I2CWrite(reg);
+	I2CStop();
+	I2CStart();
+	I2CWrite((addr << 1) | 1);
+	*data = I2CReadNACK();
+	I2CStop();
+}
+
+void I2CReadMulReg(uint8_t addr, uint8_t reg, size_t len, uint8_t *data) {
+	--len; // THis is being done so it makes the 
+	// algorithms below alot easier to implement
+	
+	I2CStart();
+	I2CWrite((addr << 1) | 0);
+	I2CWrite(reg);
+	I2CStop();
+	
+	I2CStart();
+	I2CWrite((addr << 1) | 1);
+	for (int ii = 0; ii < len; ++ii)
+		data[ii] = I2CReadACK();
+	data[len] = I2CReadNACK();
+	I2CStop();
+}
 
 ISR(PCINT0_vect) {
 	//unsigned long tmp = micros();
@@ -54,117 +132,102 @@ ISR(PCINT0_vect) {
 }
 
 void setupMPU6050() {
-	Wire.beginTransmission(MPU);
-	Wire.write(0x6B); // Power register
-	Wire.write(0); // Clear it out so we dont fall asleep
-	Wire.endTransmission();
-
-	Wire.beginTransmission(MPU);
-	Wire.write(0x1B); // Gyro register
-	Wire.write(0); // Set it to the lowest setting	(6.1 pg12)
-	Wire.endTransmission();
-
-	Wire.beginTransmission(MPU);
-	Wire.write(0x1C);
-	Wire.write(0); // Set it to the lowest setting	(6.2 pg13)
+	I2CWriteReg(MPU, 0x6B, 0x00); 
+	I2CWriteReg(MPU, 0x1B, 0x00); 
+	I2CWriteReg(MPU, 0x1C, 0x00);
 }
 
 void calibrateGyro() {
-	long long gxa, gya, gza; // We can use double here
-	// trade in performance for accuracy because we 
-	// are in setup mode 
+	long long gxa, gya, gza;
 	gxa = gya = gza = 0;
 
 	const int SAMPLES = 5000;
 	for (int ii = 0; ii < SAMPLES; ++ii) {
-		Wire.beginTransmission(MPU);
-		Wire.write(0x43); //Request gyro data
-		Wire.endTransmission();
+		uint8_t rdata[6];
+		int16_t mpu[3];
 		
-		Wire.requestFrom(MPU,6);
-		while(Wire.available() < 6);
-
-		int tmpx, tmpy, tmpz;
+		I2CReadMulReg(MPU, 0x43, 6, rdata);
 		
-		tmpx = (Wire.read() << 8) | Wire.read();		
-		tmpy = (Wire.read() << 8) | Wire.read();
-		tmpz = (Wire.read() << 8) | Wire.read();
+		for (int jj = 0; jj < 3; ++jj) {
+			size_t idx = jj * 2;
+			mpu[jj] = (rdata[idx] << 8) | rdata[idx + 1];
+		}
 
-		gxa += tmpx;
-		gya += tmpy; 
-		gza += tmpz;
+		gxa += mpu[0];
+		gya += mpu[1]; 
+		gza += mpu[2];
 	}
+	
+	const float gf = 131.0 * SAMPLES;
+	gxo = -(gxa / gf);
+	gyo = -(gya / gf);
+	gzo = -(gza / gf);
+}
 
-	gxo = -(gxa / 131.0 / SAMPLES);
-	gyo = -(gya / 131.0 / SAMPLES);
-	gzo = -(gza / 131.0 / SAMPLES);
+void setupInt() {
+	PCICR  |= (1 << PCIE0); // enable interupts on pins 7:0 (17.2.4 pg 92) 
+	PCMSK0 |= (1 << PCINT0) | (1 << PCINT1) | (1 << PCINT2) | (1 << PCINT3); // Turn on interupts on pins 0:3 (17.2.8 pg96)
+}
+
+void setupTimer() {
+	// Timer0
+	
+	// Timer1
+	TCCR1A = 0;
+	TCCR1B = (1 << CS11); // turn off the prescaler (20.14.2 pg173)
+	TCCR1C = 0;
+}
+
+void setupI2C() {
+    TWSR = 0x00; // no prescaler
+    TWBR = 0x00; //set SCL to max
+	
+    TWCR = (1 << TWEN); // Enable TWI
 }
 
 void setup() {
 	Serial.begin(9600);
+	
 	// Reset everything to 0
 	ch1 = ch2 = ch3 = ch4 = false;
 	recv_ch1 = recv_ch2 = recv_ch3 = recv_ch4 = 0;
 	timer1 = timer2 = timer3 = timer4 = 0;
+	escfr = escfl = escbr = escbl = 0;
 	
-	PCICR	|= (1 << PCIE0); // enable interupts on pins 7:0 (17.2.4 pg 92) 
-	PCMSK0 |= (1 << PCINT0) | (1 << PCINT1) | (1 << PCINT2) | (1 << PCINT3); // Turn on interupts on pins 0:3 (17.2.8 pg96)
-
-	TCCR1A = 0;
-	TCCR1B = (1 << CS10); // turn off the prescaler (20.14.2 pg173)
-	TCCR1C = 0;
-
-	Wire.begin();
-	TWBR = 0; // We want to max out the I2C speed
-	// TWSR &= ~((1 << TWPS1) | (1 << TWPS0));
+	DDRD |= 0b11110000; // set pins 4:7 as output
 	
+	setupInt();
+	setupTimer();
+	setupI2C();
 	setupMPU6050();
-
+	
 	calibrateGyro();
+	update_MPU_data(); // We want to update the gyro data once before we enter the loop
 }
 
-void read_process_MPU_data() {
-	long tmpax, tmpay, tmpaz, tmpgx, tmpgy, tmpgz, tmpt;
-	tmpax = tmpay = tmpaz = tmpgx = tmpgy = tmpgz = tmpt = 0;
+void update_MPU_data() {
+	uint8_t rdata[14];
+	int16_t mpu[7];
 	
-	// The accel data is usually very accurate, no need to average
-	Wire.beginTransmission(MPU);
-	Wire.write(0x3B); //Request accel register data
-	Wire.endTransmission();
+	I2CReadMulReg(MPU, 0x3B, 14, rdata);
 	
-	Wire.requestFrom(MPU, 6);
-	while(Wire.available() < 6);
-	
-	tmpax += (Wire.read() << 8) | Wire.read();	
-	tmpay += (Wire.read() << 8) | Wire.read();	
-	tmpaz += (Wire.read() << 8) | Wire.read();
-	
-	const int SAMPLES = 1;
-	for (int ii = 0; ii < SAMPLES; ++ii) {
-		Wire.beginTransmission(MPU); //I2C address of the MPU
-		Wire.write(0x43); //Starting register for Gyro Readings
-		Wire.endTransmission();
-	
-		Wire.requestFrom(MPU,6); //Request Gyro Registers (43 - 48)
-		while(Wire.available() < 6);
-	
-		tmpgx += (Wire.read() << 8) | Wire.read();	
-		tmpgy += (Wire.read() << 8) | Wire.read();
-		tmpgz += (Wire.read() << 8) | Wire.read();
+	for (int ii = 0; ii < 7; ++ii) {
+		size_t idx = ii * 2;
+		mpu[ii] = (rdata[idx] << 8) | rdata[idx + 1];
 	}
 	
-	const double af = 16384.0; // / SAMPLES;
-	ax = tmpax / af;
-	ay = tmpay / af; 
-	az = tmpaz / af;
+	const double af = 16384.0;
+	ax = mpu[0] / af;
+	ay = mpu[1] / af; 
+	az = mpu[2] / af;
 	
-	const double gf = 131.0 * SAMPLES;
-	gx = (tmpgx / gf) + gxo;
-	gy = (tmpgy / gf) + gyo; 
-	gz = (tmpgz / gf) + gzo;
+	const double gf = 131.0;
+	gx = (mpu[4] / gf) + gxo;
+	gy = (mpu[5] / gf) + gyo; 
+	gz = (mpu[6] / gf) + gzo;
 }
 
-void loop() {
+void serial_print_all() {
 	Serial.print(recv_ch1);
 	Serial.print('\t');
 	Serial.print(recv_ch2);
@@ -173,12 +236,8 @@ void loop() {
 	Serial.print('\t');
 	Serial.print(recv_ch4);
 	Serial.print('\t');
-	 
-	int start = micros();
-	read_process_MPU_data();
-	int elapse = micros() - start;
 	
-	Serial.print(elapse);	
+	// Serial.print(elapse);
 	Serial.print('\t');
 	Serial.print(gx);
 	Serial.print('\t');
@@ -193,8 +252,75 @@ void loop() {
 	Serial.print('\t');
 	Serial.print(az);
 	Serial.print('\t');
+}
+
+void loop() {
+	uint16_t loop_timer = TCNT1;
+	//serial_print_all();
+
+	// update_MPU_data();
+	
+	escfr = recv_ch1;
+	escfl = recv_ch2;
+	escbr = recv_ch3;
+	escbl = recv_ch4;
+	
+	// uint16_t* s;
+	// uint16_t* ss;
+	
+	// if (escfr < escfl) {
+		// s = &escfr;
+	// }
+	
+	// if ()
+
+	PORTD |= B11110000;
+	
+	uint16_t curTime = TCNT1;
+	uint16_t tch1 = escfr + curTime;
+	uint16_t tch2 = escfl + curTime;
+	uint16_t tch3 = escbr + curTime;
+	uint16_t tch4 = escbl + curTime;
+	
+	while (TCNT1 - loop_timer < 1900); // wait 2000 ticks (a little less)
+	
+	while (PORTD >= 16) {
+		curTime = TCNT1;
+		
+		if (tch1 <= TCNT1) PORTD &= 0b11101111;
+		if (tch2 <= TCNT1) PORTD &= 0b11011111;
+		if (tch3 <= TCNT1) PORTD &= 0b10111111;
+		if (tch4 <= TCNT1) PORTD &= 0b01111111;
+	}
+	
+	// set all esc values as high
+	// uint16_t current_time = TCNT1;
+	
+	
+	// if (escfr < escfl) {
+		// tmpsort[0] = &escfr;
+		// tmpsort[1] = &escfl;
+	// } else {
+		// tmpsort[1] = &escfr;
+		// tmpsort[0] = &escfl;
+	// }
+	
+	// if (escbr < escbl) {
+		// tmpsort[2] = &escbr;
+		// tmpsort[3] = &escbl;
+	// } else {
+		// tmpsort[3] = &escbr;
+		// tmpsort[2] = &escbl;
+	// }
+	
+	// if (*tmpsort[0] < *tmpsort[2]) {
+		// escodr[0] = tmpsort[0];
+		// if (*tmpsort[])
+	// } else {
+		// escodr[0] = tmpsort[2];
+	// }
 	
 	Serial.println(" ");
-	delay(250);
+	delay(1);
 }
 
