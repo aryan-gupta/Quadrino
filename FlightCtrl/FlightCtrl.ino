@@ -27,15 +27,12 @@ float anglex, angley, anglez;
 
 float pid_roll, pid_pitch, pid_yaw;
 
-bool cmpAesc, cmpBesc;
-uint16_t cmpAoth, cmpBoth;
+uint32_t escfr_tick, escfl_tick, escbr_tick, escbl_tick;
+uint16_t cmpAother, cmpBother;
 
 uint16_t T1_MSB = 0;
 uint32_t loop_timer_prev = 0;
 float loop_elapsed;
-
-
-uint32_t debug_cmpA;
 
 void I2CStart() {
 	// Clear INT bit, Start the com, and enable the I2CInit
@@ -110,38 +107,40 @@ void I2CReadMulReg(uint8_t addr, uint8_t reg, size_t len, uint8_t *data) {
 }
 
 ISR(TIMER1_COMPA_vect) {
-	// if cmpAesc is true then we want to bring the front left down
-	if (cmpAesc) {
-		PORTD &= 0b11011111; // turn off
-		debug_cmpA = get_ticks();
-	} else {
+	uint32_t ticks = get_ticks(); // run a profiler on this
+	
+	// PORTD & 0b00100000 and 
+	
+	if (escfl_tick <= ticks) {
+		PORTD &= 0b11011111;
+		OCR1A = cmpAother;
+	}
+	
+	if (escfr_tick <= ticks) {
 		PORTD &= 0b11101111;
+		OCR1A = cmpAother;
 	}
 	
 	if (PORTD & 0b00110000 == 0) { // if both are low then turn off this inturupt
 		TIMSK1 &= 0b11111101;
-	} else { // if we still have the other to deal with then set that inturupt up
-		OCR1A = cmpAoth;
-		cmpAesc = !cmpAesc;
 	}
 }
 
 ISR(TIMER1_COMPB_vect) {
-	// if cmpBesc is true then we want to bring the back left down
-	if (cmpBesc) {
-		PORTD &= 0b01111111; // turn off
-	} else {
+	uint32_t ticks = get_ticks(); // run a profiler on this
+	if (escbl_tick <= ticks) {
+		PORTD &= 0b01111111;
+		OCR1B = cmpBother;
+	}
+	
+	if (escbr_tick <= ticks) {
 		PORTD &= 0b10111111;
+		OCR1B = cmpBother;
 	}
 	
 	if (PORTD & 0b11000000 == 0) { // if both are low then turn off this inturupt
 		TIMSK1 &= 0b11111011;
-	} else { // if we still have the other to deal with then set that inturupt up
-		OCR1B = cmpBoth;
-		cmpBesc = !cmpBesc;
 	}
-	
-	//TIFR1 &= 0b11111101;
 }
 
 ISR(TIMER1_OVF_vect) {
@@ -237,9 +236,9 @@ void setupInt() {
 
 void setupTimer() {
 	// Timer0
-	//TCCR0B = 0x0; // disable Timer0
-	//TIMSK0 = 0x0;
-	//TCNT0 = 0;
+	TCCR0B = 0x0; // disable Timer0
+	TIMSK0 = 0x0;
+	TCNT0 = 0;
 	
 	// Timer1
 	TCCR1A = 0;
@@ -249,9 +248,9 @@ void setupTimer() {
 	TCNT1 = 0;
 	
 	// Timer2
-	// TCCR2B = 0x0; // disable Timer2
-	// TIMSK2 = 0x0;
-	// TCNT2 = 0;
+	TCCR2B = 0x0; // disable Timer2
+	TIMSK2 = 0x0;
+	TCNT2 = 0;
 }
 
 void setupI2C() {
@@ -451,17 +450,17 @@ void post_esc_vals() {
 	// escbr = 3120;
 	// escbl = 2030;
 	
-	escfr = 2700;
-	escfl = 2100;
-	escbr = 3500;
-	escbl = 3900;
+	escfr = recv_ch1;
+	escfl = recv_ch2;
+	escbr = recv_ch3;
+	escbl = recv_ch4;
 	
 	uint32_t curTime = get_ticks();
 	PORTD |= 0b11110000;
-	uint32_t escfr_time = escfr + curTime;
-	uint32_t escfl_time = escfl + curTime;
-	uint32_t escbr_time = escbr + curTime;
-	uint32_t escbl_time = escbl + curTime;
+	escfr_tick = escfr + curTime - 12;
+	escfl_tick = escfl + curTime - 9;
+	escbr_tick = escbr + curTime - 11;
+	escbl_tick = escbl + curTime - 8;
 	
 	/// Run a profiler here
 	
@@ -471,54 +470,35 @@ void post_esc_vals() {
 	// so there will be 2 million counts every second. this divided by 
 	// the max timer1 is overflows per second
 	
-	// if the left esc will be pulled down first then cmpAesc is true
-	// if right then cmpAesc is false
-	
 	// Compare A will handle the front l/r escs
-	if (escfr_time < escfl_time) {
-		cmpAesc = false;
-		cmpAoth = escfl_time & 0xFFFF;
-		OCR1A   = escfr_time & 0xFFFF; // We want the lower 16bits
+	if (escfr_tick < escfl_tick) {
+		cmpAother = escfl_tick; // & 0xFFFF;
+		OCR1A     = escfr_tick; // & 0xFFFF; // We want the lower 16bits
 	} else {
-		cmpAesc = true;
-		cmpAoth = escfr_time & 0xFFFF;
-		OCR1A   = escfl_time & 0xFFFF; // We want the lower 16bits
+		cmpAother = escfr_tick; // & 0xFFFF;
+		OCR1A     = escfl_tick; // & 0xFFFF; // We want the lower 16bits
 	}
 	
 	// Compare B will hangle the back l/r escs
-	if (escbr_time < escbl_time) {
-		cmpBesc = false;
-		cmpBoth = escbl_time & 0xFFFF;
-		OCR1B   = escbr_time & 0xFFFF; // We want the lower 16bits
+	if (escbr_tick < escbl_tick) {
+		cmpBother = escbl_tick; // & 0xFFFF;
+		OCR1B     = escbr_tick; // & 0xFFFF; // We want the lower 16bits
 	} else {
-		cmpBesc = true;
-		cmpBoth = escbr_time & 0xFFFF;
-		OCR1B   = escbl_time & 0xFFFF; // We want the lower 16bits
+		cmpBother = escbr_tick; // & 0xFFFF;
+		OCR1B     = escbl_tick; // & 0xFFFF; // We want the lower 16bits
 	}
 	
-	delay(1);
-	
 	// We want to enable compare interupt here
-	TIFR1 &= 0b11111001;
+	// TIFR1 &= 0b11111001;
 	TIMSK1 |= 0b110;
 	
 	// Serial.println('H');
 	// We want to do somthing useful here
 	
-	while (PORTD >= 16);
-	
-	// {
-		// auto time = get_ticks();
-		// if (escfr_time < time) PORTD &= 0b11101111;
-		// if (escfl_time < time) PORTD &= 0b11011111;
-		// if (escbr_time < time) PORTD &= 0b10111111;
-		// if (escbl_time < time) PORTD &= 0b01111111;
-
-	// } // wait for thhe signals to finish sending
+	while (PORTD >= 16); // wait for thhe signals to finish sending
 	// We want to turn off the compare inturupt in case 
 	// we loop back and hit it in while doing somthing else
 	TIMSK1 &= 0b11111001;
-	// Serial.println(get_ticks() - debug_cmpA);
 }
 
 void loop() {
@@ -553,6 +533,6 @@ void loop() {
 	//Serial.println("D");
 	// uint32_t stoptime = get_ticks() + 1000;
 	// while (get_ticks() < stoptime);
-	delay(100);
+	// delay(100);
 }
 
