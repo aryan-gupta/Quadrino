@@ -1,3 +1,5 @@
+#define DEBUG
+
 // By using out own wire library, I cut down the communication
 // time by almost 130us
 // #include <Wire.h>
@@ -10,62 +12,55 @@ const float KP = 0;
 const float KI = 0;
 const float KD = 0;
 
-float pid_i_roll = 0;
-float pid_i_pitch = 0;
-float pid_i_yaw = 0;
+float pid_i_roll = 0, pid_i_pitch = 0, pid_i_yaw = 0;
+float prev_roll_error = 0, prev_pitch_error = 0, prev_yaw_error = 0;
 
-float prev_roll_error = 0;
-float prev_pitch_error = 0;
-float prev_yaw_error = 0;
+bool ch1 = 0, ch2 = 0, ch3 = 0, ch4 = 0;
+uint16_t recv_ch1 = 0, recv_ch2 = 0, recv_ch3 = 0, recv_ch4;
+uint32_t timer1 = 0, timer2 = 0, timer3 = 0, timer4 = 0;
 
-bool ch1, ch2, ch3, ch4;
-uint16_t recv_ch1, recv_ch2, recv_ch3, recv_ch4;
-uint32_t timer1, timer2, timer3, timer4;
+float gxo = 0, gyo = 0, gzo = 0;
+float anglex = 0, angley = 0, anglez = 0;
 
-float gxo, gyo, gzo;
-float anglex, angley, anglez;
+float pid_roll = 0, pid_pitch = 0, pid_yaw = 0;
 
-float pid_roll, pid_pitch, pid_yaw;
-
-uint32_t escfr_tick, escfl_tick, escbr_tick, escbl_tick;
-uint16_t cmpAother, cmpBother;
+uint32_t escfr_tick = 0, escfl_tick = 0, escbr_tick = 0, escbl_tick = 0;
+uint16_t cmpAother = 0, cmpBother = 0;
 
 uint16_t T1_MSB = 0;
 uint32_t loop_timer_prev = 0;
-float loop_elapsed;
+float loop_elapsed = 0;
+
+uint32_t profiler_time = 0;
+
 
 void I2CStart() {
 	// Clear INT bit, Start the com, and enable the I2CInit
 	// The TWEN is only there because we are using = and not |=
-	static const uint8_t CTRL = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN);
-    TWCR = CTRL;
+    TWCR = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN);
 	// Wait for the hardware to set the INT bit (sent start bit)
     while ((TWCR & (1 << TWINT)) == 0);
 }
 
 void I2CStop() {
-	static const uint8_t CTRL = (1 << TWINT) | (1 << TWSTO) | (1 << TWEN);
-    TWCR = CTRL;
+    TWCR = (1 << TWINT) | (1 << TWSTO) | (1 << TWEN);
 }
 
-void I2CWrite(uint8_t u8data) {
-	static const uint8_t CTRL = (1 << TWINT) | (1 << TWEN);
-    TWDR = u8data;
-    TWCR = CTRL;
+void I2CWrite(uint8_t data) {
+    TWDR = data;
+    TWCR = (1 << TWINT) | (1 << TWEN);
     while ((TWCR & (1 << TWINT)) == 0);
 }
 
 uint8_t I2CReadACK() {
 	// Set ack (TWEA) bit on
-	static const uint8_t CTRL = (1 << TWINT) | (1 << TWEN) | (1 << TWEA);
-    TWCR = CTRL;
+    TWCR = (1 << TWINT) | (1 << TWEN) | (1 << TWEA);
     while ((TWCR & (1 << TWINT)) == 0);
     return TWDR;
 }
 
 uint8_t I2CReadNACK() {
-	static const uint8_t CTRL = (1 << TWINT) | (1 << TWEN);
-    TWCR = CTRL;
+    TWCR = (1 << TWINT) | (1 << TWEN);
     while ((TWCR & (1 << TWINT)) == 0);
     return TWDR;
 }
@@ -89,7 +84,7 @@ void I2CReadReg(uint8_t addr, uint8_t reg, uint8_t *data) {
 	I2CStop();
 }
 
-void I2CReadMulReg(uint8_t addr, uint8_t reg, size_t len, uint8_t *data) {
+void I2CReadMulReg(uint8_t addr, uint8_t reg, uint8_t len, uint8_t *data) {
 	--len; // THis is being done so it makes the 
 	// algorithms below alot easier to implement
 	
@@ -100,7 +95,7 @@ void I2CReadMulReg(uint8_t addr, uint8_t reg, size_t len, uint8_t *data) {
 	
 	I2CStart();
 	I2CWrite((addr << 1) | 1);
-	for (int ii = 0; ii < len; ++ii)
+	for (uint8_t ii = 0; ii < len; ++ii)
 		data[ii] = I2CReadACK();
 	data[len] = I2CReadNACK();
 	I2CStop();
@@ -108,7 +103,6 @@ void I2CReadMulReg(uint8_t addr, uint8_t reg, size_t len, uint8_t *data) {
 
 ISR(TIMER1_COMPA_vect) {
 	uint32_t ticks = get_ticks(); // run a profiler on this
-	
 	// PORTD & 0b00100000 and 
 	
 	if (escfl_tick <= ticks) {
@@ -196,24 +190,28 @@ uint32_t get_ticks() {
 	return (uint32_t(T1_MSB) << 16) | TCNT1;
 }
 
+uint16_t get_ticksL() {
+	return TCNT1;
+}
+
 void setupMPU6050() {
 	I2CWriteReg(MPU, 0x6B, 0x00); 
 	I2CWriteReg(MPU, 0x1B, 0x00); 
 	I2CWriteReg(MPU, 0x1C, 0x00);
 }
 
-void calibrateGyro() {
-	long long gxa, gya, gza;
+void calibrate_gyro() {
+	int64_t gxa, gya, gza;
 	gxa = gya = gza = 0;
 
-	const int SAMPLES = 5000;
-	for (int ii = 0; ii < SAMPLES; ++ii) {
+	const uint16_t SAMPLES = 5000;
+	for (uint16_t ii = 0; ii < SAMPLES; ++ii) {
 		uint8_t rdata[6];
 		int16_t mpu[3];
 		
 		I2CReadMulReg(MPU, 0x43, 6, rdata);
 		
-		for (int jj = 0; jj < 3; ++jj) {
+		for (uint8_t jj = 0; jj < 3; ++jj) {
 			size_t idx = jj * 2;
 			mpu[jj] = (rdata[idx] << 8) | rdata[idx + 1];
 		}
@@ -260,24 +258,28 @@ void setupI2C() {
     TWCR = (1 << TWEN); // Enable TWI
 }
 
-void setup() {
-	Serial.begin(9600);
-	
+void reset_global_vars() {
 	// Reset everything to 0
 	ch1 = ch2 = ch3 = ch4 = false;
 	recv_ch1 = recv_ch2 = recv_ch3 = recv_ch4 = 0;
 	timer1 = timer2 = timer3 = timer4 = 0;
-	
+}
+
+void setup_pins() {
+	// setup output pins
 	DDRD |= 0b11110000; // set pins 4:7 as output
-	
+}
+
+void setup() {
+#ifdef DEBUG
+	Serial.begin(9600);
+#endif	
 	setupTimer();
 	setupI2C();
 	setupMPU6050();
 	setupInt();
 	
-	
-	calibrateGyro();
-	//update_MPU_data(0); // We want to update the gyro data once before we enter the loop
+	calibrate_gyro();
 }
 
 void update_MPU_data() {
@@ -292,7 +294,7 @@ void update_MPU_data() {
 	
 	I2CReadMulReg(MPU, 0x3B, 14, rdata);
 	
-	for (int ii = 0; ii < 7; ++ii) {
+	for (uint8_t ii = 0; ii < 7; ++ii) {
 		size_t idx = ii * 2;
 		mpu[ii] = (rdata[idx] << 8) | rdata[idx + 1];
 	}
@@ -412,13 +414,7 @@ void update_pid_calc() {
 	prev_yaw_error = error;
 }
 
-void update_loop_timer() {
-	uint32_t loop_start = get_ticks();
-	loop_elapsed = (loop_start - loop_timer_prev) / 2000000.0;
-	loop_timer_prev = loop_start;
-}
-
-void post_esc_vals() {
+void start_esc_pulse() {
 	uint16_t throttle = recv_ch4;
 	if (throttle > 3900) throttle = 3900; // we want a little it of leeway so our PID calculation
 	// can still work
@@ -491,10 +487,9 @@ void post_esc_vals() {
 	// We want to enable compare interupt here
 	// TIFR1 &= 0b11111001;
 	TIMSK1 |= 0b110;
-	
-	// Serial.println('H');
-	// We want to do somthing useful here
-	
+}
+
+void finish_esc_pulse() {
 	while (PORTD >= 16); // wait for thhe signals to finish sending
 	// We want to turn off the compare inturupt in case 
 	// we loop back and hit it in while doing somthing else
@@ -502,37 +497,14 @@ void post_esc_vals() {
 }
 
 void loop() {
-	//auto start_micro = micros();
+	uint32_t loop_start = get_ticks();
 	
-	uint32_t start;
-	update_loop_timer();
-	
-	//start = get_ticks();
-	update_MPU_data();
-	//Serial.print((get_ticks() - start) / 2);
-	//Serial.print('\t');
-	
-	//start = get_ticks();
 	update_pid_calc();
-	//Serial.print((get_ticks() - start) / 2);
-	//Serial.print('\t');
+	start_esc_pulse();
+	update_MPU_data();
+	finish_esc_pulse();
+	Serial.println(get_ticks() - loop_start);
 	
-	// start = get_ticks();
-	// update_esc_val();
-	// Serial.print(get_ticks() - start);
-	// Serial.print('\t');
-	
-	//start = get_ticks();
-	post_esc_vals();
-	//Serial.print((get_ticks() - start) / 2);
-	//Serial.print('\t');
-	
-	// Serial.print(loop_elapsed);
-	// Serial.print('\t');
-	
-	//Serial.println("D");
-	// uint32_t stoptime = get_ticks() + 1000;
-	// while (get_ticks() < stoptime);
-	// delay(100);
+	loop_elapsed = (get_ticks() - loop_start) / 2000000.0;
 }
 
