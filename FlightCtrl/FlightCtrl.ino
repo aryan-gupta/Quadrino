@@ -31,8 +31,6 @@ uint16_t T1_MSB = 0;
 uint32_t loop_timer_prev = 0;
 float loop_elapsed = 0;
 
-uint32_t profiler_time = 0;
-
 
 void I2CStart() {
 	// Clear INT bit, Start the com, and enable the I2CInit
@@ -103,8 +101,7 @@ void I2CReadMulReg(uint8_t addr, uint8_t reg, uint8_t len, uint8_t *data) {
 
 ISR(TIMER1_COMPA_vect) {
 	uint32_t ticks = get_ticks(); // run a profiler on this
-	// PORTD & 0b00100000 and 
-	
+
 	if (escfl_tick <= ticks) {
 		PORTD &= 0b11011111;
 		OCR1A = cmpAother;
@@ -240,6 +237,7 @@ void setupTimer() {
 	
 	// Timer1
 	TCCR1A = 0;
+	TCCR1B = 0;
 	TCCR1B = (1 << CS11); // turn the prescaler to 8 (20.14.2 pg173)
 	TCCR1C = 0;
 	TIMSK1 |= 0b1;
@@ -258,13 +256,6 @@ void setupI2C() {
     TWCR = (1 << TWEN); // Enable TWI
 }
 
-void reset_global_vars() {
-	// Reset everything to 0
-	ch1 = ch2 = ch3 = ch4 = false;
-	recv_ch1 = recv_ch2 = recv_ch3 = recv_ch4 = 0;
-	timer1 = timer2 = timer3 = timer4 = 0;
-}
-
 void setup_pins() {
 	// setup output pins
 	DDRD |= 0b11110000; // set pins 4:7 as output
@@ -273,6 +264,7 @@ void setup_pins() {
 void setup() {
 #ifdef DEBUG
 	Serial.begin(9600);
+	Serial.print("\n\n\n\n");
 #endif	
 	setupTimer();
 	setupI2C();
@@ -441,24 +433,22 @@ void start_esc_pulse() {
 	if (escbr > 4000) escfr = 2050;
 	if (escbl > 4000) escfr = 2050;
 	
-	// escfr = 3892;
-	// escfl = 2312;
-	// escbr = 3120;
-	// escbl = 2030;
+	escfr = 3800;
+	escfl = 2600;
+	escbr = 3100;
+	escbl = 2100;
 	
-	escfr = recv_ch1;
-	escfl = recv_ch2;
-	escbr = recv_ch3;
-	escbl = recv_ch4;
+	// escfr = recv_ch1;
+	// escfl = recv_ch2;
+	// escbr = recv_ch3;
+	// escbl = recv_ch4;
 	
 	uint32_t curTime = get_ticks();
 	PORTD |= 0b11110000;
-	escfr_tick = escfr + curTime - 12;
-	escfl_tick = escfl + curTime - 9;
-	escbr_tick = escbr + curTime - 11;
-	escbl_tick = escbl + curTime - 8;
-	
-	/// Run a profiler here
+	escfr_tick = escfr + curTime;
+	escfl_tick = escfl + curTime;
+	escbr_tick = escbr + curTime;
+	escbl_tick = escbl + curTime;
 	
 	// The 16bit timer will loop back every 0.0327 seconds
 	// (16M / 8) / 2^16 = overflows per second
@@ -475,6 +465,8 @@ void start_esc_pulse() {
 		OCR1A     = escfl_tick; // & 0xFFFF; // We want the lower 16bits
 	}
 	
+	// Serial.print(OCR1A);
+	
 	// Compare B will hangle the back l/r escs
 	if (escbr_tick < escbl_tick) {
 		cmpBother = escbl_tick; // & 0xFFFF;
@@ -484,16 +476,33 @@ void start_esc_pulse() {
 		OCR1B     = escbl_tick; // & 0xFFFF; // We want the lower 16bits
 	}
 	
+	// Serial.print("curTime:    ");
+	// Serial.println(curTime);
+	// Serial.print("escfr_tick: ");
+	// Serial.println(escfr_tick);
+	// Serial.print("escfl_tick: ");
+	// Serial.println(escfl_tick);
+	// Serial.print("OCR1A:      ");
+	// Serial.println(OCR1A);
+	
+	uint32_t counter = get_ticks();
 	// We want to enable compare interupt here
-	// TIFR1 &= 0b11111001;
+	TIFR1 &= 0b11111001;
 	TIMSK1 |= 0b110;
-}
-
-void finish_esc_pulse() {
+	
 	while (PORTD >= 16); // wait for thhe signals to finish sending
+	
+	// Serial.println(get_ticks() - counter);
+	
 	// We want to turn off the compare inturupt in case 
 	// we loop back and hit it in while doing somthing else
 	TIMSK1 &= 0b11111001;
+	
+	// Serial.println("\n\n\n");
+}
+
+void finish_esc_pulse() {
+
 }
 
 void loop() {
