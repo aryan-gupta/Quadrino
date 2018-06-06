@@ -24,7 +24,7 @@ float anglex = 0, angley = 0, anglez = 0;
 
 float pid_roll = 0, pid_pitch = 0, pid_yaw = 0;
 
-uint32_t escfr_tick = 0, escfl_tick = 0, escbr_tick = 0, escbl_tick = 0;
+uint16_t escfr_tick = 0, escfl_tick = 0, escbr_tick = 0, escbl_tick = 0;
 uint16_t cmpAother = 0, cmpBother = 0;
 
 uint16_t T1_MSB = 0;
@@ -100,15 +100,23 @@ void I2CReadMulReg(uint8_t addr, uint8_t reg, uint8_t len, uint8_t *data) {
 	I2CStop();
 }
 
-ISR(TIMER1_COMPA_vect) {
-	uint32_t ticks = get_ticks(); // run a profiler on this
+uint16_t get_elapse(uint16_t start, uint16_t end) {
+	if (end < start) {
+		return (0xFFFF - end) + start;
+	} else {
+		return end - start;
+	}
+}
 
-	if (escfl_tick <= ticks) {
+ISR(TIMER1_COMPA_vect) {
+	uint16_t ticks = TCNT1;
+	
+	if (get_elapse(escfl_tick, ticks) < 10) {
 		PORTD &= 0b11011111;
 		OCR1A = cmpAother;
 	}
 	
-	if (escfr_tick <= ticks) {
+	if (get_elapse(escfr_tick, ticks) < 10) {
 		PORTD &= 0b11101111;
 		OCR1A = cmpAother;
 	}
@@ -117,7 +125,7 @@ ISR(TIMER1_COMPA_vect) {
 		TIMSK1 &= 0b11111101;
 	}
 	
-	cnt = get_ticks() - ticks;
+	cnt = get_elapse(ticks, TCNT1);
 }
 
 ISR(TIMER1_COMPB_vect) {
@@ -139,7 +147,6 @@ ISR(TIMER1_COMPB_vect) {
 
 ISR(TIMER1_OVF_vect) {
 	++T1_MSB;
-	
 	TIFR1 &= 0b11111110; // turn off the ov flag
 }
 
@@ -415,10 +422,10 @@ void start_esc_pulse() {
 	// roll is calulated by left/right escs
 	// pitch is calculate by the front/back escs
 	// yaw is controlled by the CW/CCW escs
-	uint16_t escfr = throttle + pid_roll - pid_pitch - pid_yaw; // (front right CCW)
-	uint16_t escfl = throttle - pid_roll - pid_pitch + pid_yaw; // (font left CW)
-	uint16_t escbr = throttle + pid_roll + pid_pitch + pid_yaw; // (back right CW)
-	uint16_t escbl = throttle - pid_roll + pid_pitch - pid_yaw; // (back left CCW)
+	uint32_t escfr = throttle + pid_roll - pid_pitch - pid_yaw; // (front right CCW)
+	uint32_t escfl = throttle - pid_roll - pid_pitch + pid_yaw; // (font left CW)
+	uint32_t escbr = throttle + pid_roll + pid_pitch + pid_yaw; // (back right CW)
+	uint32_t escbl = throttle - pid_roll + pid_pitch - pid_yaw; // (back left CCW)
 	
 	//// @TODO battery calculations
 	
