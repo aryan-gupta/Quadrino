@@ -112,7 +112,7 @@ ISR(TIMER1_COMPA_vect) {
 		OCR1A = cmpAother;
 	}
 	
-	if (PORTD & 0b00110000 == 0) { // if both are low then turn off this inturupt
+	if ((PORTD & 0b00110000) == 0) { // if both are low then turn off this inturupt
 		TIMSK1 &= 0b11111101;
 	}
 }
@@ -129,7 +129,7 @@ ISR(TIMER1_COMPB_vect) {
 		OCR1B = cmpBother;
 	}
 	
-	if (PORTD & 0b11000000 == 0) { // if both are low then turn off this inturupt
+	if ((PORTD & 0b11000000) == 0) { // if both are low then turn off this inturupt
 		TIMSK1 &= 0b11111011;
 	}
 }
@@ -265,7 +265,8 @@ void setup() {
 #ifdef DEBUG
 	Serial.begin(9600);
 	Serial.print("\n\n\n\n");
-#endif	
+#endif
+	setup_pins();
 	setupTimer();
 	setupI2C();
 	setupMPU6050();
@@ -433,10 +434,10 @@ void start_esc_pulse() {
 	if (escbr > 4000) escfr = 2050;
 	if (escbl > 4000) escfr = 2050;
 	
-	escfr = 3800;
-	escfl = 2104;
+	escfr = 3100;
+	escfl = 3100;
 	escbr = 3100;
-	escbl = 2100;
+	escbl = 3100;
 	
 	// escfr = recv_ch1;
 	// escfl = recv_ch2;
