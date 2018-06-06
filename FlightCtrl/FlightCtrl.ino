@@ -434,7 +434,7 @@ void start_esc_pulse() {
 	if (escbl > 4000) escfr = 2050;
 	
 	escfr = 3800;
-	escfl = 2600;
+	escfl = 2104;
 	escbr = 3100;
 	escbl = 2100;
 	
