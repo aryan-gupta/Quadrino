@@ -31,6 +31,7 @@ uint16_t T1_MSB = 0;
 uint32_t loop_timer_prev = 0;
 float loop_elapsed = 0;
 
+uint32_t cnt = 0;
 
 void I2CStart() {
 	// Clear INT bit, Start the com, and enable the I2CInit
@@ -115,6 +116,8 @@ ISR(TIMER1_COMPA_vect) {
 	if ((PORTD & 0b00110000) == 0) { // if both are low then turn off this inturupt
 		TIMSK1 &= 0b11111101;
 	}
+	
+	cnt = get_ticks() - ticks;
 }
 
 ISR(TIMER1_COMPB_vect) {
@@ -136,6 +139,7 @@ ISR(TIMER1_COMPB_vect) {
 
 ISR(TIMER1_OVF_vect) {
 	++T1_MSB;
+	
 	TIFR1 &= 0b11111110; // turn off the ov flag
 }
 
@@ -187,11 +191,7 @@ uint32_t get_ticks() {
 	return (uint32_t(T1_MSB) << 16) | TCNT1;
 }
 
-uint16_t get_ticksL() {
-	return TCNT1;
-}
-
-void setupMPU6050() {
+void setup_MPU6050() {
 	I2CWriteReg(MPU, 0x6B, 0x00); 
 	I2CWriteReg(MPU, 0x1B, 0x00); 
 	I2CWriteReg(MPU, 0x1C, 0x00);
@@ -224,12 +224,12 @@ void calibrate_gyro() {
 	gzo = -(gza / gf);
 }
 
-void setupInt() {
+void setup_int() {
 	PCICR  |= (1 << PCIE0); // enable interupts on pins 7:0 (17.2.4 pg 92) 
 	PCMSK0 |= (1 << PCINT0) | (1 << PCINT1) | (1 << PCINT2) | (1 << PCINT3); // Turn on interupts on pins 0:3 (17.2.8 pg96)
 }
 
-void setupTimer() {
+void setup_timer() {
 	// Timer0
 	TCCR0B = 0x0; // disable Timer0
 	TIMSK0 = 0x0;
@@ -249,7 +249,7 @@ void setupTimer() {
 	TCNT2 = 0;
 }
 
-void setupI2C() {
+void setup_I2C() {
     TWSR = 0x00; // no prescaler
     TWBR = 0x00; //set SCL to max
 	
@@ -267,10 +267,10 @@ void setup() {
 	Serial.print("\n\n\n\n");
 #endif
 	setup_pins();
-	setupTimer();
-	setupI2C();
-	setupMPU6050();
-	setupInt();
+	setup_timer();
+	setup_I2C();
+	setup_MPU6050();
+	setup_int();
 	
 	calibrate_gyro();
 }
@@ -459,51 +459,33 @@ void start_esc_pulse() {
 	
 	// Compare A will handle the front l/r escs
 	if (escfr_tick < escfl_tick) {
-		cmpAother = escfl_tick; // & 0xFFFF;
-		OCR1A     = escfr_tick; // & 0xFFFF; // We want the lower 16bits
+		cmpAother = escfl_tick;
+		OCR1A     = escfr_tick; // We want the lower 16bits
 	} else {
-		cmpAother = escfr_tick; // & 0xFFFF;
-		OCR1A     = escfl_tick; // & 0xFFFF; // We want the lower 16bits
+		cmpAother = escfr_tick;
+		OCR1A     = escfl_tick; // We want the lower 16bits
 	}
-	
-	// Serial.print(OCR1A);
 	
 	// Compare B will hangle the back l/r escs
 	if (escbr_tick < escbl_tick) {
-		cmpBother = escbl_tick; // & 0xFFFF;
-		OCR1B     = escbr_tick; // & 0xFFFF; // We want the lower 16bits
+		cmpBother = escbl_tick;
+		OCR1B     = escbr_tick; // We want the lower 16bits
 	} else {
-		cmpBother = escbr_tick; // & 0xFFFF;
-		OCR1B     = escbl_tick; // & 0xFFFF; // We want the lower 16bits
+		cmpBother = escbr_tick;
+		OCR1B     = escbl_tick; // We want the lower 16bits
 	}
 	
-	// Serial.print("curTime:    ");
-	// Serial.println(curTime);
-	// Serial.print("escfr_tick: ");
-	// Serial.println(escfr_tick);
-	// Serial.print("escfl_tick: ");
-	// Serial.println(escfl_tick);
-	// Serial.print("OCR1A:      ");
-	// Serial.println(OCR1A);
-	
-	uint32_t counter = get_ticks();
 	// We want to enable compare interupt here
 	TIFR1 &= 0b11111001;
 	TIMSK1 |= 0b110;
-	
+}
+
+void finish_esc_pulse() {
 	while (PORTD >= 16); // wait for thhe signals to finish sending
-	
-	// Serial.println(get_ticks() - counter);
 	
 	// We want to turn off the compare inturupt in case 
 	// we loop back and hit it in while doing somthing else
 	TIMSK1 &= 0b11111001;
-	
-	// Serial.println("\n\n\n");
-}
-
-void finish_esc_pulse() {
-
 }
 
 void loop() {
@@ -513,7 +495,8 @@ void loop() {
 	start_esc_pulse();
 	update_MPU_data();
 	finish_esc_pulse();
-	Serial.println(get_ticks() - loop_start);
+	// Serial.println(get_ticks() - loop_start);
+	Serial.println(cnt);
 	
 	loop_elapsed = (get_ticks() - loop_start) / 2000000.0;
 }
