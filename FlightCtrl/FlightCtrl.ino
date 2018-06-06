@@ -24,7 +24,9 @@ float anglex = 0, angley = 0, anglez = 0;
 
 float pid_roll = 0, pid_pitch = 0, pid_yaw = 0;
 
-uint32_t escfr_tick = 0, escfl_tick = 0, escbr_tick = 0, escbl_tick = 0;
+bool esc_fw = false;
+
+uint32_t escbr_tick = 0, escbl_tick = 0;
 uint16_t cmpAother = 0, cmpBother = 0;
 
 uint16_t T1_MSB = 0;
@@ -99,22 +101,30 @@ void I2CReadMulReg(uint8_t addr, uint8_t reg, uint8_t len, uint8_t *data) {
 	I2CStop();
 }
 
-ISR(TIMER1_COMPA_vect) {
-	uint32_t ticks = get_ticks(); // run a profiler on this
-
-	if (escfl_tick <= ticks) {
+ISR(TIMER1_COMPA_vect) {	
+	if (TCNT1 - OCR1A > 10) return; /// @todo modify the 10 to somthing concrete
+	
+	Serial.println(PORTD);
+	Serial.println(TCNT1);
+	Serial.println(OCR1A);
+	
+	if (esc_fw) {
 		PORTD &= 0b11011111;
 		OCR1A = cmpAother;
-	}
-	
-	if (escfr_tick <= ticks) {
+		esc_fw = !esc_fw;
+	} else {
 		PORTD &= 0b11101111;
 		OCR1A = cmpAother;
+		esc_fw = !esc_fw;
 	}
 	
-	if (PORTD & 0b00110000 == 0) { // if both are low then turn off this inturupt
+	Serial.println(PORTD & 0b00110000);
+	if ((PORTD & 0b00110000) == 0) { // if both are low then turn off this inturupt
 		TIMSK1 &= 0b11111101;
+		Serial.println('H');
 	}
+	
+	Serial.println(' ');
 }
 
 ISR(TIMER1_COMPB_vect) {
@@ -445,10 +455,13 @@ void start_esc_pulse() {
 	
 	uint32_t curTime = get_ticks();
 	PORTD |= 0b11110000;
-	escfr_tick = escfr + curTime;
-	escfl_tick = escfl + curTime;
+	uint32_t escfr_tick = escfr + curTime;
+	uint32_t escfl_tick = escfl + curTime;
 	escbr_tick = escbr + curTime;
 	escbl_tick = escbl + curTime;
+	
+	// esc_fw == true  LEFT DOWN FIRST
+	// esc_fw == false RIGHT FIRST
 	
 	// The 16bit timer will loop back every 0.0327 seconds
 	// (16M / 8) / 2^16 = overflows per second
@@ -458,9 +471,11 @@ void start_esc_pulse() {
 	
 	// Compare A will handle the front l/r escs
 	if (escfr_tick < escfl_tick) {
+		esc_fw = false;
 		cmpAother = escfl_tick; // & 0xFFFF;
 		OCR1A     = escfr_tick; // & 0xFFFF; // We want the lower 16bits
 	} else {
+		esc_fw = true;
 		cmpAother = escfr_tick; // & 0xFFFF;
 		OCR1A     = escfl_tick; // & 0xFFFF; // We want the lower 16bits
 	}
@@ -485,7 +500,7 @@ void start_esc_pulse() {
 	// Serial.print("OCR1A:      ");
 	// Serial.println(OCR1A);
 	
-	uint32_t counter = get_ticks();
+	// uint32_t counter = get_ticks();
 	// We want to enable compare interupt here
 	TIFR1 &= 0b11111001;
 	TIMSK1 |= 0b110;
