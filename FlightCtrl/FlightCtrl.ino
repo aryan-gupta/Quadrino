@@ -24,15 +24,15 @@ float anglex = 0, angley = 0, anglez = 0;
 
 float pid_roll = 0, pid_pitch = 0, pid_yaw = 0;
 
-bool esc_fw = false;
-
-uint32_t escbr_tick = 0, escbl_tick = 0;
+bool esc_fw = false, esc_bw = false;
 uint16_t cmpAother = 0, cmpBother = 0;
 
 uint16_t T1_MSB = 0;
 uint32_t loop_timer_prev = 0;
 float loop_elapsed = 0;
 
+
+uint16_t TCNT1_tmp;
 
 void I2CStart() {
 	// Clear INT bit, Start the com, and enable the I2CInit
@@ -104,10 +104,6 @@ void I2CReadMulReg(uint8_t addr, uint8_t reg, uint8_t len, uint8_t *data) {
 ISR(TIMER1_COMPA_vect) {	
 	if (TCNT1 - OCR1A > 10) return; /// @todo modify the 10 to somthing concrete
 	
-	Serial.println(PORTD);
-	Serial.println(TCNT1);
-	Serial.println(OCR1A);
-	
 	if (esc_fw) {
 		PORTD &= 0b11011111;
 		OCR1A = cmpAother;
@@ -118,28 +114,25 @@ ISR(TIMER1_COMPA_vect) {
 		esc_fw = !esc_fw;
 	}
 	
-	Serial.println(PORTD & 0b00110000);
 	if ((PORTD & 0b00110000) == 0) { // if both are low then turn off this inturupt
 		TIMSK1 &= 0b11111101;
-		Serial.println('H');
 	}
-	
-	Serial.println(' ');
 }
 
 ISR(TIMER1_COMPB_vect) {
-	uint32_t ticks = get_ticks(); // run a profiler on this
-	if (escbl_tick <= ticks) {
+	if (TCNT1 - OCR1B > 10) return; /// @todo modify the 10 to somthing concrete
+	
+	if (esc_bw) {
 		PORTD &= 0b01111111;
 		OCR1B = cmpBother;
-	}
-	
-	if (escbr_tick <= ticks) {
+		esc_bw = !esc_bw;
+	} else {
 		PORTD &= 0b10111111;
 		OCR1B = cmpBother;
+		esc_bw = !esc_bw;
 	}
 	
-	if (PORTD & 0b11000000 == 0) { // if both are low then turn off this inturupt
+	if ((PORTD & 0b11000000) == 0) { // if both are low then turn off this inturupt
 		TIMSK1 &= 0b11111011;
 	}
 }
@@ -273,7 +266,7 @@ void setup_pins() {
 
 void setup() {
 #ifdef DEBUG
-	Serial.begin(9600);
+	Serial.begin(115200);
 	Serial.print("\n\n\n\n");
 #endif	
 	setupTimer();
@@ -446,7 +439,7 @@ void start_esc_pulse() {
 	escfr = 3800;
 	escfl = 2104;
 	escbr = 3100;
-	escbl = 2100;
+	escbl = 2700;
 	
 	// escfr = recv_ch1;
 	// escfl = recv_ch2;
@@ -454,14 +447,17 @@ void start_esc_pulse() {
 	// escbl = recv_ch4;
 	
 	uint32_t curTime = get_ticks();
+	// Serial.println(TCNT1);
 	PORTD |= 0b11110000;
 	uint32_t escfr_tick = escfr + curTime;
 	uint32_t escfl_tick = escfl + curTime;
-	escbr_tick = escbr + curTime;
-	escbl_tick = escbl + curTime;
+	uint32_t escbr_tick = escbr + curTime;
+	uint32_t escbl_tick = escbl + curTime;
 	
-	// esc_fw == true  LEFT DOWN FIRST
-	// esc_fw == false RIGHT FIRST
+	// esc_fw == true  F LEFT DOWN FIRST
+	// esc_fw == false F RIGHT FIRST
+	// esc_bw == true  B LEFT DOWN FIRST
+	// esc_bw == false B RIGHT FIRST
 	
 	// The 16bit timer will loop back every 0.0327 seconds
 	// (16M / 8) / 2^16 = overflows per second
@@ -480,25 +476,16 @@ void start_esc_pulse() {
 		OCR1A     = escfl_tick; // & 0xFFFF; // We want the lower 16bits
 	}
 	
-	// Serial.print(OCR1A);
-	
 	// Compare B will hangle the back l/r escs
 	if (escbr_tick < escbl_tick) {
+		esc_bw = false;
 		cmpBother = escbl_tick; // & 0xFFFF;
 		OCR1B     = escbr_tick; // & 0xFFFF; // We want the lower 16bits
 	} else {
+		esc_bw = true;
 		cmpBother = escbr_tick; // & 0xFFFF;
 		OCR1B     = escbl_tick; // & 0xFFFF; // We want the lower 16bits
 	}
-	
-	// Serial.print("curTime:    ");
-	// Serial.println(curTime);
-	// Serial.print("escfr_tick: ");
-	// Serial.println(escfr_tick);
-	// Serial.print("escfl_tick: ");
-	// Serial.println(escfl_tick);
-	// Serial.print("OCR1A:      ");
-	// Serial.println(OCR1A);
 	
 	// uint32_t counter = get_ticks();
 	// We want to enable compare interupt here
@@ -507,13 +494,9 @@ void start_esc_pulse() {
 	
 	while (PORTD >= 16); // wait for thhe signals to finish sending
 	
-	// Serial.println(get_ticks() - counter);
-	
 	// We want to turn off the compare inturupt in case 
 	// we loop back and hit it in while doing somthing else
 	TIMSK1 &= 0b11111001;
-	
-	// Serial.println("\n\n\n");
 }
 
 void finish_esc_pulse() {
@@ -527,7 +510,7 @@ void loop() {
 	start_esc_pulse();
 	update_MPU_data();
 	finish_esc_pulse();
-	Serial.println(get_ticks() - loop_start);
+	// Serial.println(get_ticks() - loop_start);
 	
 	loop_elapsed = (get_ticks() - loop_start) / 2000000.0;
 }
