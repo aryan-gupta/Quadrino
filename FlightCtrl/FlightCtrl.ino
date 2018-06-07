@@ -378,7 +378,7 @@ void update_pid_calc() {
 	
 	pid_p = KP * error;
 	pid_i_roll += KI * error;
-	pid_d = KD * (error - prev_roll_error)/loop_elapsed;
+	pid_d = KD * (error - prev_roll_error) / loop_elapsed;
 	
 	pid_roll = pid_p + pid_i_roll + pid_d;
 	
@@ -428,6 +428,11 @@ void start_esc_pulse() {
 	
 	//// @TODO battery calculations
 	
+	// escfr = 3000; // D4
+	// escfl = 3100; // D5 
+	// escbr = 3200; // D6
+	// escbl = 3300; // D7
+	
 	// we dont want to turn off any of the props
 	if (escfr < 2050) escfr = 2050;
 	if (escfl < 2050) escfr = 2050;
@@ -435,22 +440,12 @@ void start_esc_pulse() {
 	if (escbl < 2050) escfr = 2050;
 	
 	// we also want to make sure that we dont esceed the PWM output limit
-	if (escfr > 4000) escfr = 2050;
-	if (escfl > 4000) escfr = 2050;
-	if (escbr > 4000) escfr = 2050;
-	if (escbl > 4000) escfr = 2050;
+	if (escfr > 4000) escfr = 4000;
+	if (escfl > 4000) escfr = 4000;
+	if (escbr > 4000) escfr = 4000;
+	if (escbl > 4000) escfr = 4000;
 	
-	escfr = 3100;
-	escfl = 3100;
-	escbr = 3100;
-	escbl = 3100;
-	
-	// escfr = recv_ch1;
-	// escfl = recv_ch2;
-	// escbr = recv_ch3;
-	// escbl = recv_ch4;
-	
-	uint32_t curTime = get_ticks();
+	uint32_t curTime = get_ticks() - 6;
 	PORTD |= 0b11110000;
 	escfr_tick = escfr + curTime;
 	escfl_tick = escfl + curTime;
