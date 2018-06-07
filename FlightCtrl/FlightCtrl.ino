@@ -282,11 +282,11 @@ void setup() {
 }
 
 void update_MPU_data() {
-	const float AF = 0.4;
-	const float OVF = 0.8;
-	
+	const float AF = 0.10;
 	const float GF = 1 - AF;
-	const float NVF = 1 - 0.7;
+	
+	const static float RTD = 180 / PI;
+	const static float DTR = PI / 180;
 	
 	uint8_t rdata[14];
 	int16_t mpu[7];
@@ -298,6 +298,10 @@ void update_MPU_data() {
 		mpu[ii] = (rdata[idx] << 8) | rdata[idx + 1];
 	}
 	
+	// X - Roll
+	// Y - Pitch
+	// Z - Yaw
+	
 	const float af = 16384.0;
 	float ax = mpu[0] / af;
 	float ay = mpu[1] / af;
@@ -308,17 +312,28 @@ void update_MPU_data() {
 	float gy = (mpu[5] / gf) + gyo;
 	float gz = (mpu[6] / gf) + gzo;
 	
-	gx = GF * gx * loop_elapsed;
-	gy = GF * gy * loop_elapsed;
-	gz = GF * gz * loop_elapsed;
+	gx = (anglex + gx * loop_elapsed);
+	gy = (angley + gy * loop_elapsed);
+	gz = (anglez + gz * loop_elapsed);
 	
-	ax = AF * atan(ax / sqrt((ay * ay) + (az * az)));
-	ay = AF * atan(ay / sqrt((ax * ax) + (az * az)));
-	az = AF * atan(sqrt((ax * ax) + (az * az)) / az);
+	gx += gy * sin(gz * DTR * loop_elapsed);
+	gy -= gx * sin(gz * DTR * loop_elapsed);
 	
-	anglex = (OVF * anglex) + (NVF * gx + ax);
-	angley = (OVF * angley) + (NVF * gy + ay);
-	anglez = (OVF * anglez) + (NVF * gz + az);
+	float atv = sqrt((ax * ax) + (ay * ay) + (az * az));
+	if (abs(ax) < atv) ax = asin(ax / atv) * RTD;
+	if (abs(ay) < atv) ay = asin(ay / atv) * RTD;
+	if (abs(az) < atv) az = asin(az / atv) * RTD;
+	
+	ax += 1.766262507;
+	ay -= 1.79014126; // Calibration data
+	
+	// ax = AF * atan(ax / sqrt((ay * ay) + (az * az))) * RTD * AF;
+	// ay = AF * atan(ay / sqrt((ax * ax) + (az * az))) * RTD * AF;
+	// az = AF * atan(sqrt((ax * ax) + (az * az)) / az) * RTD * AF;
+	
+	anglex = gx * GF + ay * AF;
+	angley = gy * GF + ax * AF;
+	anglez = gz;
 }
 
 void serial_print_all() {
@@ -353,6 +368,8 @@ void serial_print_all() {
 	Serial.print('\t');
 	Serial.print(anglez);
 	Serial.print('\t');
+	
+	Serial.println(' ');
 }
 
 void update_pid_calc() {
@@ -496,6 +513,7 @@ void loop() {
 	start_esc_pulse();
 	update_MPU_data();
 	finish_esc_pulse();
+	serial_print_all();
 	// Serial.println(get_ticks() - loop_start);
 	// Serial.println(cnt);
 	
