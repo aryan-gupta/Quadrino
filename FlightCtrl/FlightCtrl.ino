@@ -1,5 +1,7 @@
 #define DEBUG
 
+inline uint32_t get_ticks() __attribute__((always_inline));
+
 // By using out own wire library, I cut down the communication
 // time by almost 130us
 // #include <Wire.h>
@@ -116,12 +118,11 @@ ISR(TIMER1_COMPA_vect) {
 	if ((PORTD & 0b00110000) == 0) { // if both are low then turn off this inturupt
 		TIMSK1 &= 0b11111101;
 	}
-	
-	cnt = get_ticks() - ticks;
 }
 
 ISR(TIMER1_COMPB_vect) {
 	uint32_t ticks = get_ticks(); // run a profiler on this
+	
 	if (escbl_tick <= ticks) {
 		PORTD &= 0b01111111;
 		OCR1B = cmpBother;
@@ -139,7 +140,6 @@ ISR(TIMER1_COMPB_vect) {
 
 ISR(TIMER1_OVF_vect) {
 	++T1_MSB;
-	
 	TIFR1 &= 0b11111110; // turn off the ov flag
 }
 
@@ -187,7 +187,7 @@ ISR(PCINT0_vect) {
 	}
 }
 
-uint32_t get_ticks() {
+inline uint32_t get_ticks() {
 	return (uint32_t(T1_MSB) << 16) | TCNT1;
 }
 
@@ -496,7 +496,7 @@ void loop() {
 	update_MPU_data();
 	finish_esc_pulse();
 	// Serial.println(get_ticks() - loop_start);
-	Serial.println(cnt);
+	// Serial.println(cnt);
 	
 	loop_elapsed = (get_ticks() - loop_start) / 2000000.0;
 }
