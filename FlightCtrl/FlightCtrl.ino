@@ -33,8 +33,6 @@ uint16_t T1_MSB = 0;
 uint32_t loop_timer_prev = 0;
 float loop_elapsed = 0;
 
-uint32_t cnt = 0;
-
 void I2CStart() {
 	// Clear INT bit, Start the com, and enable the I2CInit
 	// The TWEN is only there because we are using = and not |=
@@ -151,39 +149,47 @@ ISR(PCINT0_vect) {
 	uint32_t tmp = get_ticks(); // this is a 16bit value
 	
 	// Channel 1 ========================
-	if (ch1 == 0 and PINB & 0b01) {
-		ch1 = 1;
-		timer1 = tmp;
-	} else if (ch1 == 1 and !(PINB & 0b01)) {
+	if (PINB & 0b01) {
+		if (ch1 == 0) {
+			ch1 = 1;
+			timer1 = tmp;
+		}
+	} else if (ch1 == 1) {
 		ch1 = 0;
 		recv_ch1 = tmp - timer1;
 	}
 	
 	// Channel 2 ========================
-	if (ch2 == 0 and PINB & 0b010) {
-		ch2 = 1;
-		timer2 = tmp;
-	} else if (ch2 == 1 and !(PINB & 0b010)) {
-		recv_ch2 = tmp - timer2;
+	if (PINB & 0b10) {
+		if (ch2 == 0) {
+			ch2 = 1;
+			timer2 = tmp;
+		}
+	} else if (ch2 == 1) {
 		ch2 = 0;
+		recv_ch2 = tmp - timer2;
 	}
-
+	
 	// Channel 3 ========================
-	if (ch3 == 0 and PINB & 0b0100) {
-		ch3 = 1;
-		timer3 = tmp;
-	} else if (ch3 == 1 and !(PINB & 0b0100)) {
-		recv_ch3 = tmp - timer3;
+	if (PINB & 0b100) {
+		if (ch3 == 0) {
+			ch3 = 1;
+			timer3 = tmp;
+		}
+	} else if (ch3 == 1) {
 		ch3 = 0;
+		recv_ch3 = tmp - timer3;
 	}
-
+	
 	// Channel 4 ========================
-	if (ch4 == 0 and PINB & 0b01000) {
-		ch4 = 1;
-		timer4 = tmp;
-	} else if (ch4 == 1 and !(PINB & 0b01000)) {
-		recv_ch4 = tmp - timer4;
+	if (PINB & 0b1000) {
+		if (ch4 == 0) {
+			ch4 = 1;
+			timer4 = tmp;
+		}
+	} else if (ch4 == 1) {
 		ch4 = 0;
+		recv_ch4 = tmp - timer4;
 	}
 }
 
