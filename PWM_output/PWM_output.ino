@@ -50,11 +50,11 @@ uint32_t get_ticks() {
 	return (uint32_t(T1_MSB) << 16) | TCNT1;
 }
 
-void output_low_esc_pulse() {
-	uint16_t escfr = 1998;
-	uint16_t escfl = 1998;
-	uint16_t escbr = 1998;
-	uint16_t escbl = 1998;
+void output_set_esc_pulse(uint16_t us) {
+	uint16_t escfr = us;
+	uint16_t escfl = us;
+	uint16_t escbr = us;
+	uint16_t escbl = us;
 	
 	uint32_t curTime = get_ticks();
 	PORTD |= 0b11110000;
@@ -125,19 +125,39 @@ void setup() {
 	setup_pins();
 	setup_timer();
 	
-	for (uint16_t ii = 0; ii < 200; ++ii) {
-		uint32_t e = get_ticks() + 12000;
-		output_low_esc_pulse();
+	// for (uint16_t ii = 0; ii < 1000; ++ii) {
+		// uint32_t e = get_ticks() + 10000;
+		// output_set_esc_pulse(4000);
+		// finish_esc_pulse();
+		// while (get_ticks() < e);
+	// }
+	
+	for (uint16_t ii = 0; ii < 1000; ++ii) {
+		uint32_t e = get_ticks() + 10000;
+		output_set_esc_pulse(2000);
 		finish_esc_pulse();
 		while (get_ticks() < e);
 	}
 }
 
-void start_esc_pulse() {	
-	uint16_t escfr = 3000;
-	uint16_t escfl = 3000;
-	uint16_t escbr = 3000;
-	uint16_t escbl = 3000;
+uint16_t gg = 2000;
+bool inc = true;
+
+void start_esc_pulse() {
+	if (inc) {
+		++gg;
+	} else {
+		--gg;
+	}
+	
+	if (gg == 4000 or gg == 2000) inc = !inc;
+	
+	
+	
+	uint16_t escfr = gg;
+	uint16_t escfl = gg;
+	uint16_t escbr = gg;
+	uint16_t escbl = gg;
 	
 	uint32_t curTime = get_ticks();
 	PORTD |= 0b11110000;
