@@ -1,12 +1,14 @@
 #define DEBUG
-
+#define FLIGHT_CTRL
 // By using out own wire library, I cut down the communication
 // time by almost 130us
 // #include <Wire.h>
 
 // https://www.youtube.com/watch?v=IdL0_ZJ7V2s
 
-const short MPU = 0b1101000;
+#include <../I2C/I2C.ino>
+#include <../PWMi/PWMi.ino>
+#include <../PWMo/PWMo.ino>
 
 const float KP = 0;
 const float KI = 0;
@@ -32,73 +34,6 @@ uint32_t loop_timer_prev = 0;
 float loop_elapsed = 0;
 
 uint32_t cnt = 0;
-
-void I2CStart() {
-	// Clear INT bit, Start the com, and enable the I2CInit
-	// The TWEN is only there because we are using = and not |=
-    TWCR = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN);
-	// Wait for the hardware to set the INT bit (sent start bit)
-    while ((TWCR & (1 << TWINT)) == 0);
-}
-
-void I2CStop() {
-    TWCR = (1 << TWINT) | (1 << TWSTO) | (1 << TWEN);
-}
-
-void I2CWrite(uint8_t data) {
-    TWDR = data;
-    TWCR = (1 << TWINT) | (1 << TWEN);
-    while ((TWCR & (1 << TWINT)) == 0);
-}
-
-uint8_t I2CReadACK() {
-	// Set ack (TWEA) bit on
-    TWCR = (1 << TWINT) | (1 << TWEN) | (1 << TWEA);
-    while ((TWCR & (1 << TWINT)) == 0);
-    return TWDR;
-}
-
-uint8_t I2CReadNACK() {
-    TWCR = (1 << TWINT) | (1 << TWEN);
-    while ((TWCR & (1 << TWINT)) == 0);
-    return TWDR;
-}
-
-void I2CWriteReg(uint8_t addr, uint8_t reg, uint8_t data) {
-	I2CStart();
-	I2CWrite((addr << 1) | 0);
-	I2CWrite(reg);
-	I2CWrite(data);
-	I2CStop();
-}
-
-void I2CReadReg(uint8_t addr, uint8_t reg, uint8_t *data) {
-	I2CStart();
-	I2CWrite((addr << 1) | 0);
-	I2CWrite(reg);
-	I2CStop();
-	I2CStart();
-	I2CWrite((addr << 1) | 1);
-	*data = I2CReadNACK();
-	I2CStop();
-}
-
-void I2CReadMulReg(uint8_t addr, uint8_t reg, uint8_t len, uint8_t *data) {
-	--len; // THis is being done so it makes the 
-	// algorithms below alot easier to implement
-	
-	I2CStart();
-	I2CWrite((addr << 1) | 0);
-	I2CWrite(reg);
-	I2CStop();
-	
-	I2CStart();
-	I2CWrite((addr << 1) | 1);
-	for (uint8_t ii = 0; ii < len; ++ii)
-		data[ii] = I2CReadACK();
-	data[len] = I2CReadNACK();
-	I2CStop();
-}
 
 uint16_t get_elapse(uint16_t start, uint16_t end) {
 	if (end < start) {
@@ -276,10 +211,31 @@ void setup() {
 	setup_pins();
 	setup_timer();
 	setup_I2C();
-	setup_MPU6050();
+	//setup_MPU6050();
 	setup_int();
 	
-	calibrate_gyro();
+	//calibrate_gyro();
+	
+	// for (uint16_t ii = 0; ii < 5000; ++ii) {
+		// uint32_t e = get_ticks() + 10000;
+		// output_set_esc_pulse(4000);
+		// finish_esc_pulse();
+		// while (get_ticks() < e);
+	// }
+
+	for (uint16_t ii = 0; ii < 1000; ++ii) {
+		uint32_t e = get_ticks() + 10000;
+		output_set_esc_pulse(2000);
+		finish_esc_pulse();
+		while (get_ticks() < e);
+	}
+	
+	// for (uint16_t ii = 0; ii < 100000; ++ii) {
+		// uint32_t e = get_ticks() + 10000;
+		// output_set_esc_pulse(3000);
+		// finish_esc_pulse();
+		// while (get_ticks() < e);
+	// }
 }
 
 void update_MPU_data() {
@@ -348,12 +304,12 @@ void serial_print_all() {
 	// Serial.print(az);
 	// Serial.print('\t');
 	
-	Serial.print(anglex);
-	Serial.print('\t');
-	Serial.print(angley);
-	Serial.print('\t');
-	Serial.print(anglez);
-	Serial.print('\t');
+	// Serial.print(anglex);
+	// Serial.print('\t');
+	// Serial.print(angley);
+	// Serial.print('\t');
+	// Serial.print(anglez);
+	// Serial.print('\t');
 }
 
 void update_pid_calc() {
@@ -414,6 +370,48 @@ void update_pid_calc() {
 	prev_yaw_error = error;
 }
 
+void output_set_esc_pulse(uint16_t us) {
+	uint16_t escfr = us;
+	uint16_t escfl = us;
+	uint16_t escbr = us;
+	uint16_t escbl = us;
+	
+	uint32_t curTime = get_ticks();
+	PORTD |= 0b11110000;
+	escfr_tick = escfr + curTime;
+	escfl_tick = escfl + curTime;
+	escbr_tick = escbr + curTime;
+	escbl_tick = escbl + curTime;
+	
+	// The 16bit timer will loop back every 0.0327 seconds
+	// (16M / 8) / 2^16 = overflows per second
+	// There are 16 million ticks per second, the prescaler is 8
+	// so there will be 2 million counts every second. this divided by 
+	// the max timer1 is overflows per second
+	
+	// Compare A will handle the front l/r escs
+	if (escfr_tick < escfl_tick) {
+		cmpAother = escfl_tick;
+		OCR1A     = escfr_tick; // We want the lower 16bits
+	} else {
+		cmpAother = escfr_tick;
+		OCR1A     = escfl_tick; // We want the lower 16bits
+	}
+	
+	// Compare B will hangle the back l/r escs
+	if (escbr_tick < escbl_tick) {
+		cmpBother = escbl_tick;
+		OCR1B     = escbr_tick; // We want the lower 16bits
+	} else {
+		cmpBother = escbr_tick;
+		OCR1B     = escbl_tick; // We want the lower 16bits
+	}
+	
+	// We want to enable compare interupt here
+	TIFR1 &= 0b11111001;
+	TIMSK1 |= 0b110;
+}
+
 void start_esc_pulse() {
 	uint16_t throttle = recv_ch4;
 	if (throttle > 3900) throttle = 3900; // we want a little it of leeway so our PID calculation
@@ -441,15 +439,15 @@ void start_esc_pulse() {
 	if (escbr > 4000) escfr = 2050;
 	if (escbl > 4000) escfr = 2050;
 	
-	escfr = 3100;
-	escfl = 3100;
-	escbr = 3100;
-	escbl = 3100;
+	// escfr = 3100;
+	// escfl = 3100;
+	// escbr = 3100;
+	// escbl = 3100;
 	
-	// escfr = recv_ch1;
-	// escfl = recv_ch2;
-	// escbr = recv_ch3;
-	// escbl = recv_ch4;
+	escfr = recv_ch1;
+	escfl = recv_ch2;
+	escbr = recv_ch3;
+	escbl = recv_ch4;
 	
 	uint32_t curTime = get_ticks();
 	PORTD |= 0b11110000;
@@ -498,12 +496,14 @@ void finish_esc_pulse() {
 void loop() {
 	uint32_t loop_start = get_ticks();
 	
-	update_pid_calc();
+	// update_pid_calc();
 	start_esc_pulse();
-	update_MPU_data();
+	// update_MPU_data();
 	finish_esc_pulse();
 	// Serial.println(get_ticks() - loop_start);
-	Serial.println(cnt);
+	// Serial.println(cnt);
+	
+	while (get_ticks() < loop_start + 10000);
 	
 	loop_elapsed = (get_ticks() - loop_start) / 2000000.0;
 }
