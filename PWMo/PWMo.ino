@@ -1,14 +1,15 @@
 #define DEBUG
 
+#pragma once
+
 const uint16_t ESC_LOW = 10000;
 
+uint16_t escfr = 0, escfl = 0, escbr = 0, escbl = 0;
 uint16_t escfr_tick = 0, escfl_tick = 0, escbr_tick = 0, escbl_tick = 0;
 uint16_t cmpAother = 0, cmpBother = 0;
-uint8_t escADown, escAODown, escBDown, escBODown;
+uint8_t escADown = 0, escAODown = 0, escBDown = 0, escBODown = 0;
 
 uint16_t T1_MSB = 0;
-uint32_t loop_timer_prev = 0;
-float loop_elapsed = 0;
 
 ISR(TIMER1_COMPA_vect) {
 	uint8_t port = escADown;
@@ -45,18 +46,19 @@ uint32_t get_ticks() {
 	return (uint32_t(T1_MSB) << 16) | TCNT1;
 }
 
+void wait_until(uint32_t ticks) {
+	
+}
+
 void output_set_esc_pulse(uint16_t us) {
-	uint16_t escfr = us;
-	uint16_t escfl = us;
-	uint16_t escbr = us;
-	uint16_t escbl = us;
+	escfr = escfl = escbr = escbl = us;
 	
 	uint32_t curTime = get_ticks();
 	PORTD |= 0b11110000;
-	escfr_tick = escfr + curTime;
-	escfl_tick = escfl + curTime;
-	escbr_tick = escbr + curTime;
-	escbl_tick = escbl + curTime;
+	uint32_t escfr_tick = escfr + curTime;
+	uint32_t escfl_tick = escfl + curTime;
+	uint32_t escbr_tick = escbr + curTime;
+	uint32_t escbl_tick = escbl + curTime;
 	
 	// The 16bit timer will loop back every 0.0327 seconds
 	// (16M / 8) / 2^16 = overflows per second
@@ -108,6 +110,7 @@ void setup_timer() {
 	TCCR1C = 0;
 	TIMSK1 |= 0b1;
 	TCNT1 = 0;
+	T1_MSB = 0;
 	
 	// Timer2
 	TCCR2B = 0x0; // disable Timer2
@@ -120,22 +123,15 @@ void setup_pins() {
 	DDRD |= 0b11110000; // set pins 4:7 as output
 }
 
-void setup() {
-#ifdef DEBUG
-	Serial.begin(9600);
-	Serial.print("\n\n\n\n");
-#endif
-	setup_pins();
-	setup_timer();
-	
-	for (uint16_t ii = 0; ii < 1000; ++ii) {
-		uint32_t e = get_ticks() + 10000;
+void calibrate_escs() {
+	for (uint16_t ii = 0; ii < 750; ++ii) {
+		uint32_t e = get_ticks() + ESC_LOW;
 		output_set_esc_pulse(4000);
 		finish_esc_pulse();
 		while (get_ticks() < e);
 	}
 	
-	for (uint16_t ii = 4000; ii > 2000; --ii) {
+	for (uint16_t ii = 4000; ii > 2000; ii -= 5) {
 		uint32_t e = get_ticks() + ESC_LOW;
 		output_set_esc_pulse(ii);
 		finish_esc_pulse();
@@ -143,18 +139,23 @@ void setup() {
 	}
 }
 
-void start_esc_pulse() {
-	uint16_t escfr = 2400;
-	uint16_t escfl = 2800;
-	uint16_t escbr = 3200;
-	uint16_t escbl = 3600;
-	
+void setup() {
+#ifdef DEBUG
+	Serial.begin(9600);
+	Serial.print("\n\n\n\n");
+#endif
+	setup_pins();
+	setup_timer();
+	calibrate_escs();
+}
+
+void start_esc_pulse() {	
 	uint32_t curTime = get_ticks();
 	PORTD |= 0b11110000;
-	escfr_tick = escfr + curTime;
-	escfl_tick = escfl + curTime;
-	escbr_tick = escbr + curTime;
-	escbl_tick = escbl + curTime;
+	uint32_t escfr_tick = escfr + curTime;
+	uint32_t escfl_tick = escfl + curTime;
+	uint32_t escbr_tick = escbr + curTime;
+	uint32_t escbl_tick = escbl + curTime;
 	
 	// The 16bit timer will loop back every 0.0327 seconds
 	// (16M / 8) / 2^16 = overflows per second
@@ -203,6 +204,11 @@ void finish_esc_pulse() {
 
 void loop() {
 	uint32_t e = get_ticks() + ESC_LOW;
+	
+	uint16_t escfr = 2400;
+	uint16_t escfl = 2800;
+	uint16_t escbr = 3200;
+	uint16_t escbl = 3600;
 	
 	start_esc_pulse();
 	finish_esc_pulse();
