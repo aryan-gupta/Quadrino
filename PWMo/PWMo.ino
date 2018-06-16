@@ -150,7 +150,7 @@ void start_esc_pulse() {
 		--gg;
 	}
 	
-	if (gg == 4000 or gg == 2000) inc = !inc;
+	if (gg == 3000 or gg == 2000) inc = !inc;
 	
 	
 	

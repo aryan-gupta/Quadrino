@@ -4,6 +4,8 @@
 // arduino to 'measure' the PWM signals for the
 // ESC's
 
+#pragma once
+
 bool ch1, ch2, ch3, ch4;
 int recv_ch1, recv_ch2, recv_ch3, recv_ch4;
 uint16_t timer1, timer2, timer3, timer4;
@@ -50,6 +52,8 @@ ISR(PCINT0_vect) {
 	}
 }
 
+#ifndef FLIGHT_CTRL
+
 void setup() {
 	// There wont be any output pins (all pins default to input)
 	Serial.begin(9600);
@@ -80,3 +84,5 @@ void loop() {
 	Serial.println(" ");
 	delay(250);
 }
+
+#endif
