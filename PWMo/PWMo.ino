@@ -1,27 +1,27 @@
 #define DEBUG
 
+const uint16_t ESC_LOW = 10000;
+
 uint16_t escfr_tick = 0, escfl_tick = 0, escbr_tick = 0, escbl_tick = 0;
 uint16_t cmpAother = 0, cmpBother = 0;
+uint8_t escADown, escAODown;
 
 uint16_t T1_MSB = 0;
 uint32_t loop_timer_prev = 0;
 float loop_elapsed = 0;
 
 ISR(TIMER1_COMPA_vect) {
-	uint32_t ticks = get_ticks(); // run a profiler on this
-	if (escfl_tick <= ticks) {
-		PORTD &= 0b11011111;
-		OCR1A = cmpAother;
-	}
-	
-	if (escfr_tick <= ticks) {
-		PORTD &= 0b11101111;
-		OCR1A = cmpAother;
-	}
-	
-	if ((PORTD & 0b00110000) == 0) { // if both are low then turn off this inturupt
+	uint8_t port = escADown;
+	escADown = escAODown;	
+	// if both are low then turn off this inturupt
+	// escODown ill only be 0 when this function runs twice
+	if (escADown = 0)
 		TIMSK1 &= 0b11111101;
-	}
+	
+	OCR1A = cmpAother; 
+	escAODown = 0;
+	PORTD &= port;
+	
 }
 
 ISR(TIMER1_COMPB_vect) {
@@ -133,7 +133,6 @@ void setup() {
 	// }
 	
 	for (uint16_t ii = 0; ii < 1000; ++ii) {
-		uint32_t e = get_ticks() + 10000;
 		output_set_esc_pulse(2000);
 		finish_esc_pulse();
 		while (get_ticks() < e);
@@ -176,9 +175,13 @@ void start_esc_pulse() {
 	if (escfr_tick < escfl_tick) {
 		cmpAother = escfl_tick;
 		OCR1A     = escfr_tick; // We want the lower 16bits
+		escADown  = 0b11101111;
+		escAODown = 0b11011111;
 	} else {
 		cmpAother = escfr_tick;
 		OCR1A     = escfl_tick; // We want the lower 16bits
+		escADown  = 0b11011111;
+		escAODown = 0b11101111;
 	}
 	
 	// Compare B will hangle the back l/r escs
@@ -204,7 +207,7 @@ void finish_esc_pulse() {
 }
 
 void loop() {
-	uint32_t e = get_ticks() + 10000;
+	uint32_t e = get_ticks() + ESC_LOW;
 	
 	start_esc_pulse();
 	finish_esc_pulse();
