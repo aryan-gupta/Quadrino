@@ -24,17 +24,37 @@ ISR(TIMER1_COMPA_vect) {
 	PORTD &= port;
 }
 
-ISR(TIMER1_COMPB_vect) {
-	uint8_t port = escBDown;
-	escBDown = escBODown;	
-	// if both are low then turn off this inturupt
-	// escODown ill only be 0 when this function runs twice
-	if (escBDown == 0)
-		TIMSK1 &= 0b11111011;
-	
-	OCR1B = cmpBother; 
-	escBODown = 0;
-	PORTD &= port;
+ISR(TIMER1_COMPB_vect, ISR_NAKED) {
+	asm volatile (
+		// Setup registers
+		"in __tmp_reg__, __SREG__"  "\n\t" // Figure out why we need this
+		"push r24"          "\n\t"
+		"push r25"          "\n\t"
+		
+		// Set esc pulse to low
+		"in	r25, 0x0b"      "\n\t" // PORTD is address 0x0b
+		"lds r24, %0"       "\n\t" 
+		"and r24, r25"      "\n\t"
+		"out 0x0b, r24"     "\n\t" // (I will figure out later how to soft code it)
+		
+		// Turn off this inturupt
+		"ld r24, Z"         "\n\t"
+		"andi r24, 0xFB"    "\n\t"
+		"st Z, r24"         "\n\t"
+		
+		// Reset registers
+		"pop r25"           "\n\t"
+		"pop r24"           "\n\t"
+		"out __SREG__, __tmp_reg__" "\n\t"
+		
+		// return
+		"reti"              "\n\t"
+
+		:  // Outputs
+		: "m" (escBDown) // Inputs
+		: "r24", "r25" // Clobber list
+	);
+
 }
 
 ISR(TIMER1_OVF_vect) {
