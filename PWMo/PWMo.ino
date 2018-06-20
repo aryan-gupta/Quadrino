@@ -38,9 +38,9 @@ ISR(TIMER1_COMPB_vect, ISR_NAKED) {
 		"out 0x0b, r24"     "\n\t" // (I will figure out later how to soft code it)
 		
 		// Turn off this inturupt
-		"ld r24, Z"         "\n\t"
+		"lds r24, 0x006F"   "\n\t" // The offset for TIMSK1 is 0x6f
 		"andi r24, 0xFB"    "\n\t"
-		"st Z, r24"         "\n\t"
+		"sts 0x006F, r24"   "\n\t" // This op needs a 16-bit address
 		
 		// Reset registers
 		"pop r25"           "\n\t"
