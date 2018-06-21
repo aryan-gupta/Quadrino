@@ -24,32 +24,32 @@ ISR(PCINT0_vect) {
 		recv_ch1 = tmp - timer1;
 	}
 	
-	// // Channel 2 ========================
-	// if (PINB & 0b010 and ch2 == 0) {
-		// ch2 = 1;
-		// timer2 = tmp;
-	// } else if (ch2 == 1) {
-		// recv_ch2 = tmp - timer2;
-		// ch2 = 0;
-	// }
+	// Channel 2 ========================
+	if (PINB & 0b010 and ch2 == 0) {
+		ch2 = 1;
+		timer2 = tmp;
+	} else if (ch2 == 1) {
+		recv_ch2 = tmp - timer2;
+		ch2 = 0;
+	}
 
-	// // Channel 3 ========================
-	// if (ch3 == 0 and PINB & 0b0100) {
-		// ch3 = 1;
-		// timer3 = tmp;
-	// } else if (ch3 == 1 and !(PINB & 0b0100)) {
-		// recv_ch3 = tmp - timer3;
-		// ch3 = 0;
-	// }
+	// Channel 3 ========================
+	if (ch3 == 0 and PINB & 0b0100) {
+		ch3 = 1;
+		timer3 = tmp;
+	} else if (ch3 == 1 and !(PINB & 0b0100)) {
+		recv_ch3 = tmp - timer3;
+		ch3 = 0;
+	}
 
-	// // Channel 4 ========================
-	// if (ch4 == 0 and PINB & 0b01000) {
-		// ch4 = 1;
-		// timer4 = tmp;
-	// } else if (ch4 == 1 and !(PINB & 0b01000)) {
-		// recv_ch4 = tmp - timer4;
-		// ch4 = 0;
-	// }
+	// Channel 4 ========================
+	if (ch4 == 0 and PINB & 0b01000) {
+		ch4 = 1;
+		timer4 = tmp;
+	} else if (ch4 == 1 and !(PINB & 0b01000)) {
+		recv_ch4 = tmp - timer4;
+		ch4 = 0;
+	}
 }
 
 #ifndef FLIGHT_CTRL
