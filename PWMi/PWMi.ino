@@ -16,19 +16,19 @@ ISR(PCINT0_vect) {
 	uint16_t tmp = TCNT1; // this is a 16bit value
 	
 	// Channel 1 ========================
-	if (PINB & 0b01 and ch1 == 0) {
+	if (ch1 == 0 and PINB & 0b01) {
 		ch1 = 1;
 		timer1 = tmp;
-	} else if (ch1 == 1) {
+	} else if (ch1 == 1 and !(PINB & 0b01)) {
 		ch1 = 0;
 		recv_ch1 = tmp - timer1;
 	}
 	
 	// Channel 2 ========================
-	if (PINB & 0b010 and ch2 == 0) {
+	if (ch2 == 0 and PINB & 0b010) {
 		ch2 = 1;
 		timer2 = tmp;
-	} else if (ch2 == 1) {
+	} else if (ch2 == 1 and !(PINB & 0b010)) {
 		recv_ch2 = tmp - timer2;
 		ch2 = 0;
 	}
@@ -68,6 +68,11 @@ void setup() {
 	TCCR1A = 0;
 	TCCR1B = (1 << CS11); // turn off the prescaler (20.14.2 pg173)
 	TCCR1C = 0;
+	
+	// Timer0
+	TCCR0B = 0x0; // disable Timer0
+	TIMSK0 = 0x0;
+	TCNT0 = 0;
 }
 
 void loop() {
@@ -82,7 +87,8 @@ void loop() {
 	
 	
 	Serial.println(" ");
-	delay(250);
+	uint16_t s = TCNT1;
+	while (TCNT1 < s + 10000);
 }
 
 #endif
