@@ -14,7 +14,7 @@ void setup() {
 
 
 void loop() {
-	uint32_t e = get_ticks() + ESC_LOW;
+	uint32_t e = TCNT1 + ESC_LOW;
 	
 	uint16_t escfr = 2400;
 	uint16_t escfl = 2800;
@@ -24,5 +24,5 @@ void loop() {
 	start_esc_pulse();
 	finish_esc_pulse();
 	
-	while (get_ticks() < e);
+	while (TCNT1 < e);
 }
