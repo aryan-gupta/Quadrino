@@ -9,20 +9,31 @@ void setup() {
 #endif
 	setup_pins();
 	setup_timer();
-	calibrate_escs();
+	// calibrate_escs();
 }
 
 
 void loop() {
-	uint32_t e = TCNT1 + ESC_LOW;
+	uint16_t s, e;
 	
-	uint16_t escfr = 2400;
-	uint16_t escfl = 2800;
-	uint16_t escbr = 3200;
-	uint16_t escbl = 3600;
+	// s = TCNT1;
+	// e = s + PHASE1_TICKS;
+	// // Do somthing productive here
+	// while (TCNT1 < e);
 	
-	start_esc_pulse();
+	s = TCNT1;
+	output_esc_pulse(ESC_FL_DOWN, 3500, ESC_FR_DOWN, 2500);
+	// Do somthing productive here
 	finish_esc_pulse();
+	e = s + PHASE2_TICKS;
+	while (TCNT1 < e);
+	
+	s = TCNT1;
+	output_esc_pulse(ESC_BL_DOWN, 3500, ESC_BR_DOWN, 2500);
+	// Do somthing productive here
+	finish_esc_pulse();
+	e = s + PHASE3_TICKS;
+	while (TCNT1 < e);
 	
 	while (TCNT1 < e);
 }

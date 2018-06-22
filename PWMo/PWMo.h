@@ -80,7 +80,7 @@ ISR(TIMER1_COMPB_vect, ISR_NAKED) {
 }
 
 void output_esc_pulse(uint8_t escA, uint16_t ticksA, uint8_t escB, uint16_t ticksB) {
-	uint32_t ctick = TCNT1;
+	uint32_t ctick = TCNT1 - 4;
 	PORTD |= escA xor escB; // hehe -- pretty much gets which escs ports/pulses are going to be set high
 	
 	uint32_t escA_tick = ctick + ticksA;
@@ -130,23 +130,35 @@ void setup_pins() {
 	DDRD |= 0b11110000; // set pins 4:7 as output
 }
 
+void finish_esc_pulse() {
+	while (PORTD >= 16); // wait for thhe signals to finish sending
+	
+	// We want to turn off the compare inturupt in case 
+	// we loop back and hit it in while doing somthing else
+	// The inturupt already turn off the inturupt but do it again
+	// here for saftey. We might remove it from the inturupt and 
+	// just do it here, lets see how it goes. 
+	TIMSK1 &= 0b11111001;
+}
+
 void calibrate_escs() {
 	uint16_t e, s;
 	
 	for (uint16_t ii = 0; ii < 750; ++ii) {
-		s = TCNT1
+		s = TCNT1;
 		e = s + PHASE1_TICKS;
+		// Do somthing productive here
 		while (TCNT1 < e);
 		
 		s = TCNT1;
-		output_set_esc_pulse(ESC_FL_DOWN, 4000, ESC_FR_DOWN, 4000);
+		output_esc_pulse(ESC_FL_DOWN, 4000, ESC_FR_DOWN, 4000);
 		// Do somthing productive here
 		finish_esc_pulse();
 		e = s + PHASE2_TICKS;
 		while (TCNT1 < e);
 		
 		s = TCNT1;
-		output_set_esc_pulse(ESC_BL_DOWN, 4000, ESC_BR_DOWN, 4000);
+		output_esc_pulse(ESC_BL_DOWN, 4000, ESC_BR_DOWN, 4000);
 		// Do somthing productive here
 		finish_esc_pulse();
 		e = s + PHASE3_TICKS;
@@ -157,30 +169,19 @@ void calibrate_escs() {
 	// Int   -- iBus >> ESC1 >> ESC2
 	// Exec  -- iBus >> MPU  >> PID
 	for (uint16_t ii = 4000; ii > 2000; ii -= 5) {
-		s = TCNT1
+		s = TCNT1;
 		e = s + PHASE1_TICKS;
 		while (TCNT1 < e);
 		
 		s = TCNT1;
-		output_set_esc_pulse(ESC_FL_DOWN, ii, ESC_FR_DOWN, ii);
+		output_esc_pulse(ESC_FL_DOWN, ii, ESC_FR_DOWN, ii);
 		finish_esc_pulse();
 		e = s + PHASE2_TICKS;
 		while (TCNT1 < e);
 		
-		output_set_esc_pulse(ESC_BL_DOWN, ii, ESC_BR_DOWN, ii);
+		output_esc_pulse(ESC_BL_DOWN, ii, ESC_BR_DOWN, ii);
 		finish_esc_pulse();
 		e = s + PHASE3_TICKS;
 		while (TCNT1 < e);
 	}
-}
-
-void finish_esc_pulse() {
-	while (PORTD >= 16); // wait for thhe signals to finish sending
-	
-	// We want to turn off the compare inturupt in case 
-	// we loop back and hit it in while doing somthing else
-	// The inturupt already turn off the inturupt but do it again
-	// here for saftey. We might remove it from the inturupt and 
-	// just do it here, lets see how it goes. 
-	TIMSK1 &= 0b11111001;
 }
