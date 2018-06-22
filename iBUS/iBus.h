@@ -1,9 +1,50 @@
 #pragma once
 
-uint16_t data[15];
+#ifndef BAUD_TOL
+#   define BAUD_TOL 2
+#endif
+
+uint16_t recv[17];
+volatile uint8_t raw[34];
+
+volatile uint8_t rdata_idx = 0;
+
+ISR(USART_RX_vect) {
+	uint8_t data = UDR0;
+	if (rdata_idx == 0 and data != 0x20) {
+		return;
+	}
+	
+	raw[rdata_idx] = data;
+	++rdata_idx;
+	
+	if (rdata_idx == 32) {
+		UCSR0B &= ~(1 << RXCIE0); // Enable Rx Complete Interrupt
+	}
+}
 
 void setup_recv() {
-  Serial.begin(115200);
+	unsigned long baud = 115200;
+	
+	uint8_t use2x = 0;
+	uint16_t ubbr =  (F_CPU + 8UL * baud) / (16UL * baud) - 1UL;
+	if ( (100 * (F_CPU)) > (16 * (ubbr + 1) * (100 * ubbr + ubbr * BAUD_TOL)) ) {
+		use2x = 1;
+		ubbr = (F_CPU + 4UL * baud) / (8UL * baud) - 1UL;
+	}
+
+	UBRR0L = ubbr & 0xff;
+	UBRR0H = ubbr >> 8;
+	if (use2x) {
+		UCSR0A |= (1 << U2X0);
+	} else {
+		UCSR0A &= ~(1 << U2X0);
+	}
+	
+	UCSR0B |= (1<<RXEN0);  // Enable Reciever
+	UCSR0B |= (1<<RXCIE0); // Enable Rx Complete Interrupt
+	
+	Serial.begin(baud);
 }
 
 /*
@@ -25,6 +66,7 @@ void setup_recv() {
 
 */
 
+/*
 void get_recv_data() {
 	uint8_t raw[30];
 	
@@ -70,3 +112,5 @@ void get_recv_data() {
 	data[12] = raw[24] + (raw[25] << 8); // 3. 
 	data[13] = raw[26] + (raw[27] << 8); // 4. 
 }
+
+*/
