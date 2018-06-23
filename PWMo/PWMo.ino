@@ -10,6 +10,7 @@ void setup() {
 	setup_pins();
 	setup_timer();
 	calibrate_escs();
+	output_empty_pulse();
 }
 
 

@@ -185,3 +185,27 @@ void calibrate_escs() {
 		while (TCNT1 < e);
 	}
 }
+
+void output_empty_pulse() {
+	uint16_t e, s;
+	for (uint16_t ii = 0; ii < 750; ++ii) {
+		s = TCNT1;
+		e = s + PHASE1_TICKS;
+		// Do somthing productive here
+		while (TCNT1 < e);
+		
+		s = TCNT1;
+		output_esc_pulse(ESC_FL_DOWN, 2000, ESC_FR_DOWN, 2000);
+		// Do somthing productive here
+		finish_esc_pulse();
+		e = s + PHASE2_TICKS;
+		while (TCNT1 < e);
+		
+		s = TCNT1;
+		output_esc_pulse(ESC_BL_DOWN, 2000, ESC_BR_DOWN, 2000);
+		// Do somthing productive here
+		finish_esc_pulse();
+		e = s + PHASE3_TICKS;
+		while (TCNT1 < e);
+	}
+}
