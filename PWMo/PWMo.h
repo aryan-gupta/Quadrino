@@ -2,6 +2,11 @@
 
 #pragma once
 
+// https://stackoverflow.com/questions/6682733/gcc-prohibit-use-of-some-registers
+// register uint8_t rr2 asm ("r2"); // set aside this register for sreg in isr
+// register uint8_t rr3 asm ("r16");
+// register uint8_t rr4 asm ("r3");
+
 const uint16_t ESC_LOW = 10000;
 const uint8_t ESC_FR_DOWN = 0b11011111; // 0xDF
 const uint8_t ESC_FL_DOWN = 0b11101111; // 0xEF
@@ -17,66 +22,61 @@ uint8_t escADown = 0, escBDown = 0;
 ISR(TIMER1_COMPA_vect, ISR_NAKED) {
 	asm volatile (
 		// Setup registers
-		"in __tmp_reg__, __SREG__"  "\n\t" // Figure out why we need this
-		"push r24"          "\n\t"
-		"push r25"          "\n\t"
+		"in r2, __SREG__"  "\n\t"
+		"push r16"         "\n\t"
 		
 		// Set esc pulse to low
-		"in	r25, 0x0b"      "\n\t" // PORTD is address 0x0b
-		"lds r24, %0"       "\n\t" 
-		"and r24, r25"      "\n\t"
-		"out 0x0b, r24"     "\n\t" // (I will figure out later how to soft code it)
+		"in	r3, 0x0b"       "\n\t" // PORTD is address 0x0b
+		"lds r16, %0"       "\n\t" 
+		"and r16, r3"       "\n\t"
+		"out 0x0b, r16"     "\n\t" // (I will figure out later how to soft code it)
 		
 		// Turn off this inturupt
-		"lds r24, 0x006F"   "\n\t" // The offset for TIMSK1 is 0x6f
-		"andi r24, 0xFD"    "\n\t"
-		"sts 0x006F, r24"   "\n\t" // This op needs a 16-bit address
+		"lds r16, 0x006F"   "\n\t" // The offset for TIMSK1 is 0x6f
+		"andi r16, 0xFD"    "\n\t"
+		"sts 0x006F, r16"   "\n\t" // This op needs a 16-bit address
 		
 		// Reset registers
-		"pop r25"           "\n\t"
-		"pop r24"           "\n\t"
-		"out __SREG__, __tmp_reg__" "\n\t"
+		"pop r16"          "\n\t"
+		"out __SREG__, r2" "\n\t"
 		
 		// return
-		"reti"              "\n\t"
+		"reti"             "\n\t"
 
 		:  // Outputs
 		: "m" (escADown) // Inputs
-		: "r24", "r25" // Clobber list
+		: "r2", "r3", "r16" // Clobber list
 	);
 }
 
 ISR(TIMER1_COMPB_vect, ISR_NAKED) {
-	asm volatile (
+		asm volatile (
 		// Setup registers
-		"in __tmp_reg__, __SREG__"  "\n\t" // Figure out why we need this
-		"push r24"          "\n\t"
-		"push r25"          "\n\t"
+		"in r2, __SREG__"  "\n\t"
+		"push r16"         "\n\t"
 		
 		// Set esc pulse to low
-		"in	r25, 0x0b"      "\n\t" // PORTD is address 0x0b
-		"lds r24, %0"       "\n\t" 
-		"and r24, r25"      "\n\t"
-		"out 0x0b, r24"     "\n\t" // (I will figure out later how to soft code it)
+		"in	r3, 0x0b"       "\n\t" // PORTD is address 0x0b
+		"lds r16, %0"       "\n\t" 
+		"and r16, r3"       "\n\t"
+		"out 0x0b, r16"     "\n\t" // (I will figure out later how to soft code it)
 		
 		// Turn off this inturupt
-		"lds r24, 0x006F"   "\n\t" // The offset for TIMSK1 is 0x6f
-		"andi r24, 0xFB"    "\n\t"
-		"sts 0x006F, r24"   "\n\t" // This op needs a 16-bit address
+		"lds r16, 0x006F"   "\n\t" // The offset for TIMSK1 is 0x6f
+		"andi r16, 0xFB"    "\n\t"
+		"sts 0x006F, r16"   "\n\t" // This op needs a 16-bit address
 		
 		// Reset registers
-		"pop r25"           "\n\t"
-		"pop r24"           "\n\t"
-		"out __SREG__, __tmp_reg__" "\n\t"
+		"push r16"         "\n\t"
+		"out __SREG__, r2" "\n\t"
 		
 		// return
-		"reti"              "\n\t"
+		"reti"             "\n\t"
 
 		:  // Outputs
-		: "m" (escBDown) // Inputs
-		: "r24", "r25" // Clobber list
+		: "m" (escADown) // Inputs
+		: "r2", "r3", "r16" // Clobber list
 	);
-
 }
 
 void output_esc_pulse(uint8_t escA, uint16_t ticksA, uint8_t escB, uint16_t ticksB) {
