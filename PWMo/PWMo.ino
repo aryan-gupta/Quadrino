@@ -1,12 +1,12 @@
 
+
+#include "C:/Users/Aryan/Projects/Quadrino/FlightCtrl/FlightCtrl.h"
 #include "PWMo.h"
 #define DEBUG
 
 void setup() {
-#ifdef DEBUG
-	Serial.begin(9600);
+	Serial.begin(BAUD_RATE);
 	Serial.print("\n\n\n\n");
-#endif
 	setup_pins();
 	setup_timer();
 	calibrate_escs();

@@ -1,24 +1,7 @@
-#include "iBus.h"
 
-void setup_timer() {
-	// Timer0
-	TCCR0B = 0x0; // disable Timer0
-	TIMSK0 = 0x0;
-	TCNT0 = 0;
-	
-	// Timer1
-	TCCR1A = 0;
-	TCCR1B = 0;
-	TCCR1B = (1 << CS11); // turn the prescaler to 8 (20.14.2 pg173)
-	TCCR1C = 0;
-	// TIMSK1 |= 0b1; // enable interrupt
-	TCNT1 = 0;
-	
-	// Timer2
-	TCCR2B = 0x0; // disable Timer2
-	TIMSK2 = 0x0;
-	TCNT2 = 0;
-}
+
+#include "C:/Users/Aryan/Projects/Quadrino/FlightCtrl/FlightCtrl.h"
+#include "iBus.h"
 
 void setup() {
 	Serial.begin(115200);

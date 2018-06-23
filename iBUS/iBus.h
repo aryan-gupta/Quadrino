@@ -27,9 +27,7 @@ uint16_t recv[USART_FRAME_SIZE / 2];
 	the code here:
 	http://forum.arduino.cc/index.php?topic=37874.0
 */
-void setup_recv() {
-	unsigned long baud = 115200;
-	
+void setup_recv(unsigned long baud) {
 	uint8_t use2x = 0;
 	uint16_t ubbr =  (F_CPU + 8UL * baud) / (16UL * baud) - 1UL;
 	if ( (100 * (F_CPU)) > (16 * (ubbr + 1) * (100 * ubbr + ubbr * BAUD_TOL)) ) {

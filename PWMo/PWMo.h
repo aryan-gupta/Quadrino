@@ -98,31 +98,6 @@ void output_esc_pulse(uint8_t escA, uint16_t ticksA, uint8_t escB, uint16_t tick
 	TIMSK1 |= 0b110;
 }
 
-void setup_timer() {
-	// Timer0
-	TCCR0B = 0x0; // disable Timer0
-	TIMSK0 = 0x0;
-	TCNT0 = 0;
-	
-	// Timer1
-	TCCR1A = 0;
-	TCCR1B = 0;
-	TCCR1B = (1 << CS11); // turn the prescaler to 8 (20.14.2 pg173)
-	TCCR1C = 0;
-	// TIMSK1 |= 0b1; // enable interrupt
-	TCNT1 = 0;
-	
-	// Timer2
-	TCCR2B = 0x0; // disable Timer2
-	TIMSK2 = 0x0;
-	TCNT2 = 0;
-}
-
-void setup_pins() {
-	// setup output pins
-	DDRD |= 0b11110000; // set pins 4:7 as output
-}
-
 void finish_esc_pulse() {
 	while (PORTD >= 16); // wait for thhe signals to finish sending
 	
