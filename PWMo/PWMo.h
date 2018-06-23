@@ -7,15 +7,14 @@
 // register uint8_t rr3 asm ("r16");
 // register uint8_t rr4 asm ("r3");
 
-const uint16_t ESC_LOW = 10000;
 const uint8_t ESC_FR_DOWN = 0b11011111; // 0xDF
 const uint8_t ESC_FL_DOWN = 0b11101111; // 0xEF
 const uint8_t ESC_BR_DOWN = 0b01111111;
 const uint8_t ESC_BL_DOWN = 0b10111111;
 
-const uint16_t PHASE1_TICKS = 4500;
-const uint16_t PHASE2_TICKS = 4500;
-const uint16_t PHASE3_TICKS = 4500;
+const uint16_t PHASE1_TICKS = 900;
+const uint16_t PHASE2_TICKS = 4000 + 50;
+const uint16_t PHASE3_TICKS = 4000 + 50;
 
 uint8_t escADown = 0, escBDown = 0;
 
@@ -169,7 +168,7 @@ void calibrate_escs() {
 	// Ticks -- 4500 >> 4500 >> 4500
 	// Int   -- iBus >> ESC1 >> ESC2
 	// Exec  -- iBus >> MPU  >> PID
-	for (uint16_t ii = 4000; ii > 2000; ii -= 5) {
+	for (uint16_t ii = 4000; ii >= 2000; ii -= 5) {
 		s = TCNT1;
 		e = s + PHASE1_TICKS;
 		while (TCNT1 < e);

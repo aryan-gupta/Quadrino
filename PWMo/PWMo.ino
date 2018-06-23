@@ -9,17 +9,17 @@ void setup() {
 #endif
 	setup_pins();
 	setup_timer();
-	// calibrate_escs();
+	calibrate_escs();
 }
 
 
 void loop() {
 	uint16_t s, e;
 	
-	// s = TCNT1;
-	// e = s + PHASE1_TICKS;
-	// // Do somthing productive here
-	// while (TCNT1 < e);
+	s = TCNT1;
+	e = s + PHASE1_TICKS;
+	// Do somthing productive here
+	while (TCNT1 < e);
 	
 	s = TCNT1;
 	output_esc_pulse(ESC_FL_DOWN, 3500, ESC_FR_DOWN, 2500);
@@ -33,7 +33,5 @@ void loop() {
 	// Do somthing productive here
 	finish_esc_pulse();
 	e = s + PHASE3_TICKS;
-	while (TCNT1 < e);
-	
 	while (TCNT1 < e);
 }
