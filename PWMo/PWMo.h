@@ -19,6 +19,7 @@ const uint16_t PHASE3_TICKS = 4500;
 
 uint8_t escADown = 0, escBDown = 0;
 
+// https://electronics.stackexchange.com/questions/117430/avr-gcc-timer-overflow-interrupt-handler-in-inline-assembly
 ISR(TIMER1_COMPA_vect, ISR_NAKED) {
 	asm volatile (
 		// Setup registers
