@@ -26,9 +26,13 @@ void setup() {
 	setup_timer();
 }
 
-void loop() {	
+void loop() {
+	uint16_t tmp = TCNT1;
 	process_usart_data();
-
+	uint16_t el = TCNT1 - tmp;
+	Serial.print(el);
+	Serial.print(' ');
+	
 	for (uint8_t i = 0; i < 16; i++) { 
 		Serial.print(recv[i]);
 		Serial.print(' ');
