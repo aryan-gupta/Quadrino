@@ -1,12 +1,30 @@
 #pragma once
 
-uint16_t recv[16];
-volatile uint8_t raw[64];
+const uint8_t USART_FRAME_SIZE = 32;
+
+uint16_t recv[USART_FRAME_SIZE / 2];
+volatile uint8_t raw[USART_FRAME_SIZE];
 volatile uint8_t idx = 0;
 
-// Most of this serial code is based from:
-// http://forum.arduino.cc/index.php?topic=37874.0
-
+/*
+	The general iBus protocol is this:
+	iBus is a Serial protocol that operates at 115.2 kHz.
+	The first two bytes are sync/start bytes consisting off
+	0x20 then 0x40. Then there are 14 channels of recv, each
+	channel being 16bits. The recv is little endian so bytes
+	must be swapped. After that, there are 2 bytes that are 
+	check sum bytes and is just 0xFFFF subtracted by every byte
+	we transfered. (I dont know what this means but I bet that 
+	the answer is in these two links). Majority of this code is
+	based on this:
+	https://github.com/povlhp/iBus2PPM
+	and this:
+	https://basejunction.wordpress.com/2015/08/23/en-flysky-i6-14-channels-part1/
+	Only 10 channels of the recv really means somthing to us so
+	we extract that. The code for the Serial protocol is based on
+	the code here:
+	http://forum.arduino.cc/index.php?topic=37874.0
+*/
 void setup_recv() {
 	unsigned long baud = 115200;
 	
@@ -31,6 +49,10 @@ void setup_recv() {
 }
 
 ISR(USART_RX_vect){
+	/// @todo maybe add a simple counter so if our checksum is
+	// invalid we can be notified of new data
+	// The other way we can do it is if we have a 64 byte buffer
+	// while we read one buffer, the other buffer is being filled
 	uint8_t data = UDR0;
 	
 	if (idx == 0 and data != 0x20) return;
@@ -46,56 +68,26 @@ ISR(USART_RX_vect){
 	idx = (idx + 1) % 32;
 }
 
-/*
-	The general iBus protocol is this:
-	iBus is a Serial protocol that operates at 115.2 kHz.
-	The first two bytes are sync/start bytes consisting off
-	0x20 then 0x40. Then there are 14 channels of recv, each
-	channel being 16bits. The recv is little endian so bytes
-	must be swapped. After that, there are 2 bytes that are 
-	check sum bytes and is just 0xFFFF subtracted by every byte
-	we transfered. (I dont know what this means but I bet that 
-	the answer is in these two links). Majority of this code is
-	based on this:
-	https://github.com/povlhp/iBus2PPM
-	and this:
-	https://basejunction.wordpress.com/2015/08/23/en-flysky-i6-14-channels-part1/
-	Only 10 channels of the recv really means somthing to us so
-	we extract that. 
-
-*/
-
-void get_recv_data() {
-	while (true) {
-		uint8_t val;
-		
-		while (Serial.available() < 32);
-		
-		val = Serial.read();
-		if (val != 0x20) continue;
-		
-		val = Serial.read();
-		if (val != 0x40) continue;
-		
-		for (uint8_t idx = 0; idx < 30; ++idx) {
-			raw[idx] = Serial.read();
-		}
-		
-		recv[14] = raw[28]  + (raw[29] << 8);
-		
-		uint16_t chksum = 0xFFFF - 0x20 - 0x40;
-		for (uint8_t i = 0; i < 28; i++) {
-			chksum -= raw[i];
-		}
-		
-		if (recv[14] == chksum) break;
-		else continue; // Error found in the recv
+void process_usart_data() {
+	recv[ 0] = raw[ 0] + (raw[ 1] << 8);
+	recv[ 1] = raw[ 2] + (raw[ 3] << 8);
+	recv[ 2] = raw[ 4] + (raw[ 5] << 8);
+	recv[ 3] = raw[ 6] + (raw[ 7] << 8);
+	recv[ 4] = raw[ 8] + (raw[ 9] << 8);
+	recv[ 5] = raw[10] + (raw[11] << 8);
+	recv[ 6] = raw[12] + (raw[13] << 8);
+	recv[ 7] = raw[14] + (raw[15] << 8);
+	recv[ 8] = raw[16] + (raw[17] << 8);
+	recv[ 9] = raw[18] + (raw[19] << 8);
+	recv[10] = raw[20] + (raw[21] << 8);
+	recv[11] = raw[22] + (raw[23] << 8); // 1  dummy channels 
+	recv[12] = raw[24] + (raw[25] << 8); // 2 
+	recv[13] = raw[26] + (raw[27] << 8); // 3 
+	recv[14] = raw[28] + (raw[29] << 8); // 4 
+	recv[15] = raw[30] + (raw[31] << 8);
+	
+	uint16_t chksum = 0xFFFF;
+	for (uint8_t i = 0; i < 30; i++) {
+		chksum -= raw[i];
 	}
-}
-
-uint8_t USART_Receive() {
-	/* Wait for data to be received */
-	while (!(UCSR0A & (1 << RXC0)));
-	/* Get and return received data from buffer */
-	return UDR0;
 }
