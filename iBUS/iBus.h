@@ -134,7 +134,22 @@ void process_usart_data() {
 	if (chksum != recv[15]) // Error in trans. Use old data
 		return;
 	
-	// recv[ 0] = raw[ 0] + (raw[ 1] << 8);
+	recv[ 0] = raw[ 0] + (raw[ 1] << 8);
+	
+	if (recv[0] != 0x4020) {
+		recv[ 1] = 1500;
+		recv[ 2] = 1500;
+		recv[ 3] = 1000; // throttle should be low
+		recv[ 4] = 1500; // everything else should be 
+		recv[ 5] = 1500; // center stick position
+		recv[ 6] = 1500;
+		recv[ 7] = 1500;
+		recv[ 8] = 1500;
+		recv[ 9] = 1500;
+		recv[10] = 1500;
+		return;
+	}
+	
 	recv[ 1] = raw[ 2] + (raw[ 3] << 8);
 	recv[ 2] = raw[ 4] + (raw[ 5] << 8);
 	recv[ 3] = raw[ 6] + (raw[ 7] << 8);
