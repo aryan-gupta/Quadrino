@@ -1,8 +1,6 @@
 #pragma once
 
-register uint8_t rr2 asm ("r2"); // set aside this register for sreg in isr
-register uint8_t rr3 asm ("r3");
-register uint8_t rr4 asm ("r4");
+register uint8_t rr2 asm ("r2");
 
 const uint8_t USART_FRAME_SIZE = 32;
 
@@ -85,6 +83,12 @@ ISR(USART_RX_vect) {
 	static uint8_t idx = 0;
 	uint8_t data = UDR0;
 	
+	// Now that we have out data we should re-enable interrupts
+	// However this may create nested interrupts and we dont want this
+	// so we first disable USART_RX interrupt then enable global interrupts
+	// UCSR0B &= ~(1 << RXCIE0);
+	// sei();
+	
 	if (idx == 0 and data != 0x20) return;
 	
 	if (buff1State == 1) {
@@ -95,7 +99,7 @@ ISR(USART_RX_vect) {
 			buff2State = 1;
 			idx = 0;
 		}
-	} else if (buff2State == 1) {
+	} else /* if (buff2State == 1) */ { // One of these is guaranteed to be 1
 		usart_buffer2[idx++] = data;
 		if (idx == USART_FRAME_SIZE) {
 			// This will be atomic cause we are in an ISR
@@ -104,6 +108,9 @@ ISR(USART_RX_vect) {
 			idx = 0;
 		}
 	}
+	
+	// cli();
+	// UCSR0B |= (1 << RXCIE0);
 }
 
 void process_usart_data() {
