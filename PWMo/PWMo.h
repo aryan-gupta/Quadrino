@@ -1,5 +1,9 @@
 #pragma once
 
+register uint8_t rr3 asm ("r3"); // set aside this register for sreg in isr
+register uint8_t rr4 asm ("r4");
+register uint8_t rr5 asm ("r5");
+
 const uint8_t ESC_FL_DOWN = 0b11101111; // 0xEF
 const uint8_t ESC_FR_DOWN = 0b11011111; // 0xDF
 const uint8_t ESC_BL_DOWN = 0b10111111;
@@ -10,74 +14,56 @@ uint8_t escADown = 0, escBDown = 0;
 ISR(TIMER1_COMPA_vect, ISR_NAKED) {
 	asm volatile (
 		// Setup registers
-		"in __tmp_reg__, __SREG__"  "\n\t" // Figure out why we need this
-		"push r24"          "\n\t"
-		"push r25"          "\n\t"
+		"in r3, __SREG__"  "\n\t" // Figure out why we need this
 		
 		// Set esc pulse to low
-		"in	r25, 0x0b"      "\n\t" // PORTD is address 0x0b
-		"lds r24, %0"       "\n\t" 
-		"and r24, r25"      "\n\t"
-		"out 0x0b, r24"     "\n\t" // (I will figure out later how to soft code it)
-		
-		// Turn off this inturupt
-		"lds r24, 0x006F"   "\n\t" // The offset for TIMSK1 is 0x6f
-		"andi r24, 0xFD"    "\n\t"
-		"sts 0x006F, r24"   "\n\t" // This op needs a 16-bit address
+		"in	r4, 0x0b"      "\n\t" // PORTD is address 0x0b
+		"lds r5, %0"       "\n\t" 
+		"and r5, r4"      "\n\t"
+		"out 0x0b, r5"     "\n\t" // (I will figure out later how to soft code it)
 		
 		// Reset registers
-		"pop r25"           "\n\t"
-		"pop r24"           "\n\t"
-		"out __SREG__, __tmp_reg__" "\n\t"
+		"out __SREG__, r3" "\n\t"
 		
 		// return
 		"reti"              "\n\t"
 
 		:  // Outputs
 		: "m" (escADown) // Inputs
-		: "r24", "r25" // Clobber list
+		: "r3", "r4", "r5" // Clobber list
 	);
 }
 
 ISR(TIMER1_COMPB_vect, ISR_NAKED) {
 	asm volatile (
 		// Setup registers
-		"in __tmp_reg__, __SREG__"  "\n\t" // Figure out why we need this
-		"push r24"          "\n\t"
-		"push r25"          "\n\t"
+		"in r3, __SREG__"  "\n\t" // Figure out why we need this
 		
 		// Set esc pulse to low
-		"in	r25, 0x0b"      "\n\t" // PORTD is address 0x0b
-		"lds r24, %0"       "\n\t" 
-		"and r24, r25"      "\n\t"
-		"out 0x0b, r24"     "\n\t" // (I will figure out later how to soft code it)
-		
-		// Turn off this inturupt
-		"lds r24, 0x006F"   "\n\t" // The offset for TIMSK1 is 0x6f
-		"andi r24, 0xFB"    "\n\t"
-		"sts 0x006F, r24"   "\n\t" // This op needs a 16-bit address
+		"in	r4, 0x0b"      "\n\t" // PORTD is address 0x0b
+		"lds r5, %0"       "\n\t" 
+		"and r5, r4"      "\n\t"
+		"out 0x0b, r5"     "\n\t" // (I will figure out later how to soft code it)
 		
 		// Reset registers
-		"pop r25"           "\n\t"
-		"pop r24"           "\n\t"
-		"out __SREG__, __tmp_reg__" "\n\t"
+		"out __SREG__, r3" "\n\t"
 		
 		// return
 		"reti"              "\n\t"
 
 		:  // Outputs
 		: "m" (escBDown) // Inputs
-		: "r24", "r25" // Clobber list
+		: "r3", "r4", "r5" // Clobber list
 	);
 
 }
 
 void output_esc_pulse(uint8_t escA, uint16_t ticksA, uint8_t escB, uint16_t ticksB) {
-	uint32_t ctick = TCNT1 - 4;
+	uint16_t ctick = TCNT1 - 4;
 	PORTD |= escA xor escB; // hehe -- pretty much gets which escs ports/pulses are going to be set high
 	
-	uint32_t escA_tick = ctick + ticksA;
-	uint32_t escB_tick = ctick + ticksB;
+	uint16_t escA_tick = ctick + ticksA;
+	uint16_t escB_tick = ctick + ticksB;
 	
 	// The 16bit timer will loop back every 0.0327 seconds
 	// (16M / 8) / 2^16 = overflows per second
