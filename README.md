@@ -41,7 +41,7 @@ You can review each module with its test code separately
 
 ## Prerequisites
 Please make sure that the USART/Serial library that Arduino automatically
-includes does not have ISR(USART_RX_vect) function or there will be 
+includes does not have `ISR(USART_RX_vect)` function or there will be 
 compilation errors
 
 ## Contributing
