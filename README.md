@@ -56,6 +56,7 @@ compilation errors
 
 ## License
 Copyright (c) 2017 The Gupta Empire - All Rights Reserved
+
 Please see Licence.md file for more information
 
 ## Acknowledgments
@@ -80,8 +81,10 @@ Then I read about a proprietary signaling method called iBus.
 This communication protocol is specific to FlySky receivers and took
 some googling to find resources that had reverse engineered the
 protocol. You can read about it here:
+
  - https://github.com/povlhp/iBus2PPM/blob/master/iBus2PPM.ino
  - https://basejunction.wordpress.com/2015/08/23/en-flysky-i6-14-channels-part1/
+ 
 The iBus protocol sends new data every 7ms, meaning we would only need
 a little over 1 update to get new data. 
 
@@ -123,6 +126,7 @@ I started out with I2C using the Wire library, however I found that it was
 too slow, I decided to write my own library. This way I was able to set the
 I2C speed and remove the error checking process (ehh, we don't really need
 it). I based this code from this tutorial:
+
  - https://embedds.com/programming-avr-i2c-interface/
 
 ### PWM
