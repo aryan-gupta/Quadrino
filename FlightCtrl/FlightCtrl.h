@@ -52,7 +52,6 @@ void setup_timer() {
 	TCCR1B = 0;
 	TCCR1B = (1 << CS11); // turn the prescaler to 8 (20.14.2 pg173)
 	TCCR1C = 0;
-	// TIMSK1 |= 0b1; // enable interrupt
 	TCNT1 = 0;
 	
 	// Timer2

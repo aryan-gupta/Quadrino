@@ -1,10 +1,12 @@
 #pragma once
 
 register uint8_t rr2 asm ("r2");
-
 const uint8_t USART_FRAME_SIZE = 32;
-
 int16_t recv[USART_FRAME_SIZE / 2];
+uint8_t usart_buffer1[USART_FRAME_SIZE];
+volatile uint8_t buff1State = 1; // this needs to be volatile because both functions can be using it
+uint8_t usart_buffer2[USART_FRAME_SIZE];
+volatile uint8_t buff2State = 0;
 
 /*
 	The general iBus protocol is this:
@@ -20,7 +22,7 @@ int16_t recv[USART_FRAME_SIZE / 2];
 	https://github.com/povlhp/iBus2PPM
 	and this:
 	https://basejunction.wordpress.com/2015/08/23/en-flysky-i6-14-channels-part1/
-	Only 10 channels of the recv really means somthing to us so
+	Only 10 channels of the recv really means something to us so
 	we extract that. The code for the Serial protocol is based on
 	the code here:
 	http://forum.arduino.cc/index.php?topic=37874.0
@@ -74,10 +76,6 @@ void setup_recv(unsigned long baud) {
 	because only one function will be using one buffer. nobody on state 0, 
 	ISR on state 1, and main function on state 2
 */
-uint8_t usart_buffer1[USART_FRAME_SIZE];
-volatile uint8_t buff1State = 1; // this needs to be volatile because both functions can be using it
-uint8_t usart_buffer2[USART_FRAME_SIZE];
-volatile uint8_t buff2State = 0;
 
 ISR(USART_RX_vect) {
 	static uint8_t idx = 0;
