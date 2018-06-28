@@ -1,4 +1,4 @@
-const uint16_t PHASE1_TICKS = 100;
+const uint16_t PHASE1_TICKS = 4000;
 const uint16_t PHASE2_TICKS = 4000 + 50;
 const uint16_t PHASE3_TICKS = 4000 + 50;
 
@@ -7,6 +7,27 @@ const unsigned long BAUD_RATE = 115200;
 const float KP = 0;
 const float KI = 0;
 const float KD = 0;
+
+enum RECV_CHANNELS : uint8_t {
+	START,
+	ROLL,
+	PITCH,
+	THROTTLE,
+	YAW,
+	VRA,
+	VRB,
+	SWA,
+	SWB,
+	SWC,
+	SWD,
+	// D1,
+	// D2,
+	// D3,
+	// D4,
+	CSUM = 15
+};
+
+uint16_t escfr = 0, escfl = 0, escbr = 0, escbl = 0;
 
 float pid_i_roll = 0, pid_i_pitch = 0, pid_i_yaw = 0;
 float prev_roll_error = 0, prev_pitch_error = 0, prev_yaw_error = 0;
