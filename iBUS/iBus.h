@@ -4,7 +4,7 @@ register uint8_t rr2 asm ("r2");
 
 const uint8_t USART_FRAME_SIZE = 32;
 
-uint16_t recv[USART_FRAME_SIZE / 2];
+int16_t recv[USART_FRAME_SIZE / 2];
 
 /*
 	The general iBus protocol is this:
@@ -41,9 +41,9 @@ void setup_recv(unsigned long baud) {
 		UCSR0A &= ~(1 << U2X0);
 	}
 	
-	UCSR0B |= (1 << RXEN0); // enable recv
+	UCSR0B |=  (1 << RXEN0); // enable recv
 	UCSR0B &= ~(1 << UDRIE0); // disable Data Register Empty interrupt
-	UCSR0B |= (1 << RXCIE0); // enable interrupt
+	UCSR0B |=  (1 << RXCIE0); // enable interrupt
 }
 
 
@@ -120,7 +120,7 @@ void process_usart_data() {
 	asm volatile ("in r2, __SREG__" :::"r2");
 	cli();
 	if        (buff1State == 0) {
-		buff1State = 2;
+		buff1State = 2; // We technically don't need this but... its just 2 cycles
 		raw = usart_buffer1;
 	} else if (buff2State == 0) {
 		buff2State = 2;
@@ -128,47 +128,68 @@ void process_usart_data() {
 	}
 	asm volatile ("out __SREG__, r2" :::"r2");
 	
-	// Serial.print(buff1State);
-	// Serial.print(' ');
-	// Serial.println(buff2State);
-	
-	recv[15] = raw[30] + (raw[31] << 8);
+	recv[CSUM] = raw[30] + (raw[31] << 8);
 	uint16_t chksum = 0xFFFF;
-	for (uint8_t i = 0; i < 30; i++) {
-		chksum -= raw[i];
+	for (uint8_t ii = 0; ii < 30; ii++) {
+		chksum -= raw[ii];
 	}
 	
-	if (chksum != recv[15]) // Error in trans. Use old data
+	if (chksum != recv[CSUM]) // Error in trans. Use old data
 		return;
 	
-	recv[ 0] = raw[ 0] + (raw[ 1] << 8);
+	recv[0] = raw[0] + (raw[1] << 8);
 	
-	if (recv[0] != 0x4020) {
-		recv[ 1] = 1500;
-		recv[ 2] = 1500;
-		recv[ 3] = 1000; // throttle should be low
-		recv[ 4] = 1500; // everything else should be 
-		recv[ 5] = 1500; // center stick position
-		recv[ 6] = 1500;
-		recv[ 7] = 1500;
-		recv[ 8] = 1500;
-		recv[ 9] = 1500;
-		recv[10] = 1500;
+	if (recv[START   ] != 0x4020) {
+		recv[ROLL    ]  = 1500;
+		recv[PITCH   ]  = 1500;
+		recv[THROTTLE]  = 1000; // throttle should be low
+		recv[YAW     ]  = 1500; // everything else should be 
+		recv[VRA     ]  = 1500; // center stick position
+		recv[VRB     ]  = 1500;
+		recv[SWA     ]  = 1500;
+		recv[SWB     ]  = 1500;
+		recv[SWC     ]  = 1500;
+		recv[SWD     ]  = 1500;
 		return;
 	}
 	
-	recv[ 1] = raw[ 2] + (raw[ 3] << 8);
-	recv[ 2] = raw[ 4] + (raw[ 5] << 8);
-	recv[ 3] = raw[ 6] + (raw[ 7] << 8);
-	recv[ 4] = raw[ 8] + (raw[ 9] << 8);
-	recv[ 5] = raw[10] + (raw[11] << 8);
-	recv[ 6] = raw[12] + (raw[13] << 8);
-	recv[ 7] = raw[14] + (raw[15] << 8);
-	recv[ 8] = raw[16] + (raw[17] << 8);
-	recv[ 9] = raw[18] + (raw[19] << 8);
-	recv[10] = raw[20] + (raw[21] << 8);
+	recv[ROLL    ] = raw[ 2] + (raw[ 3] << 8);
+	recv[PITCH   ] = raw[ 4] + (raw[ 5] << 8);
+	recv[THROTTLE] = raw[ 6] + (raw[ 7] << 8);
+	recv[YAW     ] = raw[ 8] + (raw[ 9] << 8);
+	recv[VRA     ] = raw[10] + (raw[11] << 8);
+	recv[VRB     ] = raw[12] + (raw[13] << 8);
+	recv[SWA     ] = raw[14] + (raw[15] << 8);
+	recv[SWB     ] = raw[16] + (raw[17] << 8);
+	recv[SWC     ] = raw[18] + (raw[19] << 8);
+	recv[SWD     ] = raw[20] + (raw[21] << 8);
 	// recv[11] = raw[22] + (raw[23] << 8); // 1  dummy channels 
 	// recv[12] = raw[24] + (raw[25] << 8); // 2 
 	// recv[13] = raw[26] + (raw[27] << 8); // 3 
 	// recv[14] = raw[28] + (raw[29] << 8); // 4 
+}
+
+void mix_channels() {
+	uint16_t throttle = recv[THROTTLE] * 2;
+	
+	pid_roll  = recv[ROLL ] - 1500;
+	pid_pitch = recv[PITCH] - 1500;
+	pid_yaw   = recv[YAW  ] - 1500;
+	
+	escfr = throttle + pid_roll - pid_pitch - pid_yaw; // (front right CCW)
+	escfl = throttle - pid_roll - pid_pitch + pid_yaw; // (font left CW)
+	escbr = throttle + pid_roll + pid_pitch + pid_yaw; // (back right CW)
+	escbl = throttle - pid_roll + pid_pitch - pid_yaw; // (back left CCW)
+	
+	if      (escfr < 2000) escfr = 2000;
+	else if (escfr > 4000) escfr = 4000;
+	
+	if      (escfl < 2000) escfl = 2000;
+	else if (escfl > 4000) escfl = 4000;
+	
+	if      (escbr < 2000) escbr = 2000;
+	else if (escbr > 4000) escbr = 4000;
+	
+	if      (escbl < 2000) escbl = 2000;
+	else if (escbl > 4000) escbl = 4000;
 }
