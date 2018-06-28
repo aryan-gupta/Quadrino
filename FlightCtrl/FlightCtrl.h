@@ -66,7 +66,6 @@ void setup_pins() {
 	DDRD |= 0b11110000; // set pins 4:7 as output
 }
 
-/*
 void setup_MPU6050() {
 	I2CWriteReg(MPU, 0x6B, 0x00); 
 	I2CWriteReg(MPU, 0x1B, 0x00); 
@@ -98,13 +97,6 @@ void calibrate_gyro() {
 	gxo = -(gxa / gf);
 	gyo = -(gya / gf);
 	gzo = -(gza / gf);
-}
-
-void setup_I2C() {
-    TWSR = 0x00; // no prescaler
-    TWBR = 0x00; //set SCL to max
-	
-    TWCR = (1 << TWEN); // Enable TWI
 }
 
 void update_MPU_data() {
@@ -204,4 +196,3 @@ void update_pid_calc() {
 	
 	prev_yaw_error = error;
 }
-*/

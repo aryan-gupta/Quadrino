@@ -3,6 +3,13 @@
 // Code in her is largely based on 
 // https://embedds.com/programming-avr-I2C_-interface/
 
+void setup_I2C() {
+    TWSR = 0x00; // no prescaler
+    TWBR = 0x00; //set SCL to max
+	
+    TWCR = (1 << TWEN); // Enable TWI
+}
+
 void I2C_Init() {
     TWSR = 0x00; // no prescaler
     TWBR = 0x00; //set SCL to max
