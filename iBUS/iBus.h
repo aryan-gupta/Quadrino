@@ -1,12 +1,8 @@
 #pragma once
 
-register uint8_t rr2 asm ("r2");
+register uint8_t rr3 asm ("r3");
 const uint8_t USART_FRAME_SIZE = 32;
 int16_t recv[USART_FRAME_SIZE / 2];
-uint8_t usart_buffer1[USART_FRAME_SIZE];
-volatile uint8_t buff1State = 1; // this needs to be volatile because both functions can be using it
-uint8_t usart_buffer2[USART_FRAME_SIZE];
-volatile uint8_t buff2State = 0;
 
 /*
 	The general iBus protocol is this:
@@ -27,6 +23,7 @@ volatile uint8_t buff2State = 0;
 	the code here:
 	http://forum.arduino.cc/index.php?topic=37874.0
 */
+
 void setup_recv(unsigned long baud) {
 	uint8_t use2x = 0;
 	uint16_t ubbr =  (F_CPU + 8UL * baud) / (16UL * baud) - 1UL;
@@ -47,7 +44,6 @@ void setup_recv(unsigned long baud) {
 	UCSR0B &= ~(1 << UDRIE0); // disable Data Register Empty interrupt
 	UCSR0B |=  (1 << RXCIE0); // enable interrupt
 }
-
 
 /*
 	I will be implementing this as a tri-state double buffer (tri-state
@@ -77,54 +73,50 @@ void setup_recv(unsigned long baud) {
 	ISR on state 1, and main function on state 2
 */
 
+uint8_t buffer1_start[USART_FRAME_SIZE * 2];
+uint8_t* const buffer2_start = buffer1_start + USART_FRAME_SIZE;
+uint8_t* const buffer_end = buffer1_start + (USART_FRAME_SIZE * 2);
+
+bool buff1_ready = false, buff2_ready = false;
+
 ISR(USART_RX_vect) {
-	static uint8_t idx = 0;
+	static uint8_t* loc = buffer1_start;
 	uint8_t data = UDR0;
 	
-	// Now that we have out data we should re-enable interrupts
-	// However this may create nested interrupts and we dont want this
-	// so we first disable USART_RX interrupt then enable global interrupts
-	// UCSR0B &= ~(1 << RXCIE0);
-	// sei();
-	
-	if (idx == 0 and data != 0x20) return;
-	
-	if (buff1State == 1) {
-		usart_buffer1[idx++] = data;
-		if (idx == USART_FRAME_SIZE) {
-			// This will be atomic cause we are in an ISR
-			buff1State = 0; // set this buffer as ready
-			buff2State = 1;
-			idx = 0;
-		}
-	} else /* if (buff2State == 1) */ { // One of these is guaranteed to be 1
-		usart_buffer2[idx++] = data;
-		if (idx == USART_FRAME_SIZE) {
-			// This will be atomic cause we are in an ISR
-			buff1State = 1;
-			buff2State = 0; // set this buffer as ready
-			idx = 0;
-		}
+	if (loc == buffer1_start or loc == buffer2_start) {
+		if (data != 0x20) return;
 	}
 	
-	// cli();
-	// UCSR0B |= (1 << RXCIE0);
+	*loc = data;
+	loc++;
+	
+	if (loc == buffer2_start) { // technically we only need to compare the LSB because its an array
+		buff1_ready = true;
+		buff2_ready = false;
+		return;
+	}
+	
+	if (loc == buffer_end) {
+		buff2_ready = true;
+		buff1_ready = false;
+		loc = buffer1_start;
+		return;
+	}
 }
 
 void process_usart_data() {
 	// This needs to be done atomically
 	// turn off global interrupts
 	uint8_t* raw;
-	asm volatile ("in r2, __SREG__" :::"r2");
+	
+	asm volatile ("in r3, __SREG__" :::"r3");
 	cli();
-	if        (buff1State == 0) {
-		buff1State = 2; // We technically don't need this but... its just 2 cycles
-		raw = usart_buffer1;
-	} else if (buff2State == 0) {
-		buff2State = 2;
-		raw = usart_buffer2;
+	if        (buff1_ready) {
+		raw = buffer1_start;
+	} else if (buff2_ready) {
+		raw = buffer2_start;
 	}
-	asm volatile ("out __SREG__, r2" :::"r2");
+	asm volatile ("out __SREG__, r3" :::"r3");
 	
 	recv[CSUM] = raw[30] + (raw[31] << 8);
 	uint16_t chksum = 0xFFFF;
@@ -135,7 +127,7 @@ void process_usart_data() {
 	if (chksum != recv[CSUM]) // Error in trans. Use old data
 		return;
 	
-	recv[0] = raw[0] + (raw[1] << 8);
+	recv[START] = raw[0] + (raw[1] << 8);
 	
 	if (recv[START   ] != 0x4020) {
 		recv[ROLL    ]  = 1500;
@@ -170,9 +162,9 @@ void process_usart_data() {
 void mix_channels() {
 	uint16_t throttle = recv[THROTTLE] * 2;
 	
-	pid_roll  = recv[ROLL ] - 1500;
-	pid_pitch = recv[PITCH] - 1500;
-	pid_yaw   = recv[YAW  ] - 1500;
+	// pid_roll  = recv[ROLL ] - 1500;
+	// pid_pitch = recv[PITCH] - 1500;
+	// pid_yaw   = recv[YAW  ] - 1500;
 	
 	escfr = throttle + pid_roll - pid_pitch - pid_yaw; // (front right CCW)
 	escfl = throttle - pid_roll - pid_pitch + pid_yaw; // (font left CW)

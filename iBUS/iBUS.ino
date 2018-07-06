@@ -4,8 +4,8 @@
 #include "iBus.h"
 
 void setup() {
-	Serial.begin(115200);
-	setup_recv();
+	Serial.begin(BAUD_RATE);
+	setup_recv(BAUD_RATE);
 	setup_timer();
 }
 
