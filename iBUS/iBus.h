@@ -77,31 +77,60 @@ uint8_t buffer1_start[USART_FRAME_SIZE * 2];
 uint8_t* const buffer2_start = buffer1_start + USART_FRAME_SIZE;
 uint8_t* const buffer_end = buffer1_start + (USART_FRAME_SIZE * 2);
 
-bool buff1_ready = false, buff2_ready = false;
+volatile bool buff1_ready = false;
+volatile bool buff2_ready = false;
 
-ISR(USART_RX_vect) {
+ISR(USART_RX_vect, ISR_NAKED) {
 	static uint8_t* loc = buffer1_start;
-	uint8_t data = UDR0;
+	asm volatile (
+		"in r2, __SREG__"     "\n\t" // Preamble
+		"push r30"            "\n\t"
+		"push r31"            "\n\t"
+		
+		"lds r4, 0x00C6"      "\n\t" // capture UDR0 register
+		
+		"lds r30, %[_loc]"   "\n\t" // load first byte of address of buff location
+		"cpi r30, lo8(%[_buf1s])" "\n\t"
+		"breq SB"             "\n\t"
+		//"cpi r30, %B[_buf2s]" "\n\t"
+		"brne MN"             "\n\t"
+	"SB: ldi r31, 0x20"       "\n\t"
+		"cp r4, r31"          "\n\t"
+		"brne EN"             "\n\t"
+	"MN: lds r31, %[_loc] + 1"   "\n\t"
+		"st Z+, r4"           "\n\t"
+		//"cpi r30, %B[_buf2s]" "\n\t"
+		"brne L2"             "\n\t"
+		"sts %B[_loc], r30"   "\n\t"
+		"sts %A[_loc], r31"   "\n\t"
+		"ldi r30, 0x0"        "\n\t"
+		"ldi r31, 0x1"        "\n\t"
+		"sts %[_buf1r], r31"  "\n\t"
+		"sts %[_buf2r], r30"  "\n\t"
+		"rjmp EN"             "\n\t"
+	"L2:"/* cpi r30, %B[_bufe]" */ "\n\t"
+		"brne EN"             "\n\t"
+		"lds r30, %B[_buf1s]" "\n\t"
+		"lds r31, %A[_buf1s]" "\n\t"
+		"sts %B[_loc], r30"   "\n\t"
+		"sts %A[_loc], r31"   "\n\t"
+		"ldi r30, 0x0"        "\n\t"
+		"ldi r31, 0x1"        "\n\t"
+		"sts %[_buf1r], r30"  "\n\t"
+		"sts %[_buf2r], r31"  "\n\t"
+	"EN: pop r31"             "\n\t"
+		"pop r30"             "\n\t"
+		"out __SREG__, r2"    "\n\t"
 	
-	if (loc == buffer1_start or loc == buffer2_start) {
-		if (data != 0x20) return;
-	}
-	
-	*loc = data;
-	loc++;
-	
-	if (loc == buffer2_start) { // technically we only need to compare the LSB because its an array
-		buff1_ready = true;
-		buff2_ready = false;
-		return;
-	}
-	
-	if (loc == buffer_end) {
-		buff2_ready = true;
-		buff1_ready = false;
-		loc = buffer1_start;
-		return;
-	}
+		: // Outputs
+		: [_loc]   "m" (loc),
+		  [_buf1s] "m" (buffer1_start), 
+		  [_buf2s] "m" (buffer2_start),
+		  [_buf1r] "m" (buff1_ready),
+		  [_buf2r] "m" (buff2_ready),
+		  [_bufe]  "m" (buffer_end)
+		: "r2", "r4", "r30", "r31"// Clobber list
+	);
 }
 
 void process_usart_data() {
