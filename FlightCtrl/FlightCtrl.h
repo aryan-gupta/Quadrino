@@ -4,9 +4,9 @@ const uint16_t PHASE3_TICKS = 4000 + 50;
 
 const unsigned long BAUD_RATE = 115200;
 
-const float KP = 0;
-const float KI = 0;
-const float KD = 0;
+const float KP = 1;
+const float KI = 1;
+const float KD = 1;
 
 enum RECV_CHANNELS : uint8_t {
 	START,
@@ -62,6 +62,7 @@ void setup_pins() {
 	DDRD |= 0b11110000; // set pins 4:7 as output
 }
 
+/*
 void update_pid_calc() {
 	// the recv_ch? calues are between 2000 and 4000
 	// where 3000 is the center stick value
@@ -78,7 +79,7 @@ void update_pid_calc() {
 	float ch_value, error, pid_p, pid_d;
 	
 	// ROLL
-	ch_value = recv_ch1 - 3000; // map the values from -1000 to 1000
+	ch_value = recv[ROLL] - 3000; // map the values from -1000 to 1000
 	ch_value *= 0.04; // this will give us the degrees that the reciver should get
 	
 	error = anglex - ch_value;
@@ -118,4 +119,26 @@ void update_pid_calc() {
 	pid_yaw = pid_p + pid_i_yaw + pid_d;
 	
 	prev_yaw_error = error;
+	
+	// Final
+	uint16_t throttle = recv[THROTTLE] * 2;
+	
+	escfr = throttle + pid_roll - pid_pitch - pid_yaw; // (front right CCW)
+	escfl = throttle - pid_roll - pid_pitch + pid_yaw; // (font left CW)
+	escbr = throttle + pid_roll + pid_pitch + pid_yaw; // (back right CW)
+	escbl = throttle - pid_roll + pid_pitch - pid_yaw; // (back left CCW)
+	
+	if      (escfr < 2000) escfr = 2000;
+	else if (escfr > 4000) escfr = 4000;
+	
+	if      (escfl < 2000) escfl = 2000;
+	else if (escfl > 4000) escfl = 4000;
+	
+	if      (escbr < 2000) escbr = 2000;
+	else if (escbr > 4000) escbr = 4000;
+	
+	if      (escbl < 2000) escbl = 2000;
+	else if (escbl > 4000) escbl = 4000;
 }
+
+*/

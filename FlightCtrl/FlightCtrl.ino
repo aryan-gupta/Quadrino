@@ -33,24 +33,24 @@ void loop() {
 	
 	/// ================ PHASE 1 =============================
 	s = TCNT1;
-	e = s + PHASE1_TICKS;
 		process_usart_data();
 		mix_channels();
+	e = s + PHASE1_TICKS;
 	while (TCNT1 < e);
 	
 	/// ================ PHASE 2 =============================
 	s = TCNT1;
+		output_esc_pulse(ESC_FL_DOWN, escfl, ESC_FR_DOWN, escfr);
+			update_MPU_data();
+		finish_esc_pulse();
 	e = s + PHASE2_TICKS;
-	output_esc_pulse(ESC_FL_DOWN, escfl, ESC_FR_DOWN, escfr);
-	//	update_MPU_data();
-	finish_esc_pulse();
 	while (TCNT1 < e);
 	
 	/// ================ PHASE 2 =============================
 	s = TCNT1;
-	output_esc_pulse(ESC_BL_DOWN, escbl, ESC_BR_DOWN, escbr);
-		// update_pid_calc();
-	finish_esc_pulse();
+		output_esc_pulse(ESC_BL_DOWN, escbl, ESC_BR_DOWN, escbr);
+			// update_pid_calc();
+		finish_esc_pulse();
 	e = s + PHASE3_TICKS;
 	while (TCNT1 < e);
 	
