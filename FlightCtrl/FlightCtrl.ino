@@ -1,9 +1,15 @@
 
 #include "C:/Users/Aryan/Projects/Quadrino/FlightCtrl/FlightCtrl.h"
-// #include "C:/Users/Aryan/Projects/Quadrino/I2C/I2C.h"
+#include "C:/Users/Aryan/Projects/Quadrino/I2C/I2C.h"
+#include "C:/Users/Aryan/Projects/Quadrino/MPU/MPU.h"
 #include "C:/Users/Aryan/Projects/Quadrino/iBus/iBus.h"
 #include "C:/Users/Aryan/Projects/Quadrino/PWMo/PWMo.h"
 
+// Reserved Registers
+// r2 - sreg for ISR
+// r3 - iBus.h | process_usart_data() | sreg for atomic change
+// r4 - PWMo.h | ISR(TIMER1_COMPA_vect, ISR_NAKED)
+// r5 - PWMo.h | ISR(TIMER1_COMPA_vect, ISR_NAKED)
 
 void setup() {
 	Serial.begin(BAUD_RATE);

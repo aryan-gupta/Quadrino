@@ -1,6 +1,6 @@
 #pragma once
 
-register uint8_t rr3 asm ("r3"); // set aside this register for sreg in isr
+register uint8_t rr2 asm ("r2"); // set aside this register for sreg in isr
 register uint8_t rr4 asm ("r4");
 register uint8_t rr5 asm ("r5");
 
@@ -11,10 +11,14 @@ const uint8_t ESC_BR_DOWN = 0b01111111;
 
 uint8_t escADown = 0, escBDown = 0;
 
+// https://electronics.stackexchange.com/questions/117430
+// THis link helped me alot and I keep losing the link
+// Finally added it here
+
 ISR(TIMER1_COMPA_vect, ISR_NAKED) {
 	asm volatile (
 		// Setup registers
-		"in r3, __SREG__"  "\n\t" // Figure out why we need this
+		"in r2, __SREG__"  "\n\t" // Figure out why we need this
 		
 		// Set esc pulse to low
 		"in	r4, 0x0b"      "\n\t" // PORTD is address 0x0b
@@ -23,21 +27,21 @@ ISR(TIMER1_COMPA_vect, ISR_NAKED) {
 		"out 0x0b, r5"     "\n\t" // (I will figure out later how to soft code it)
 		
 		// Reset registers
-		"out __SREG__, r3" "\n\t"
+		"out __SREG__, r2" "\n\t"
 		
 		// return
 		"reti"              "\n\t"
 
 		:  // Outputs
 		: "m" (escADown) // Inputs
-		: "r3", "r4", "r5" // Clobber list
+		: "r2", "r4", "r5" // Clobber list
 	);
 }
 
 ISR(TIMER1_COMPB_vect, ISR_NAKED) {
 	asm volatile (
 		// Setup registers
-		"in r3, __SREG__"  "\n\t" // Figure out why we need this
+		"in r2, __SREG__"  "\n\t" // Figure out why we need this
 		
 		// Set esc pulse to low
 		"in	r4, 0x0b"      "\n\t" // PORTD is address 0x0b
@@ -46,14 +50,14 @@ ISR(TIMER1_COMPB_vect, ISR_NAKED) {
 		"out 0x0b, r5"     "\n\t" // (I will figure out later how to soft code it)
 		
 		// Reset registers
-		"out __SREG__, r3" "\n\t"
+		"out __SREG__, r2" "\n\t"
 		
 		// return
 		"reti"              "\n\t"
 
 		:  // Outputs
 		: "m" (escBDown) // Inputs
-		: "r3", "r4", "r5" // Clobber list
+		: "r2", "r4", "r5" // Clobber list
 	);
 
 }
