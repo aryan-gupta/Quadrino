@@ -1,4 +1,9 @@
 
+const float GF = 0.98;
+const float AF = 1 - GF;
+
+const float gf = 131.0;
+	
 const uint8_t MPU = 0b1101000;
 
 float gxo = 0, gyo = 0, gzo = 0;
@@ -8,6 +13,20 @@ void setup_MPU6050() {
 	I2C_WriteReg(MPU, 0x6B, 0x00); 
 	I2C_WriteReg(MPU, 0x1B, 0x00); 
 	I2C_WriteReg(MPU, 0x1C, 0x00);
+}
+
+void setup_angle_vals() {
+	uint8_t rdata[6];
+	I2C_ReadMulReg(MPU, 0x3B, 6, rdata);
+	
+	float ax = ((rdata[0] << 8) | rdata[1]);
+	float ay = ((rdata[2] << 8) | rdata[3]);
+	float az = ((rdata[4] << 8) | rdata[5]);
+	
+	anglex = atan(ax / sqrt((ay * ay) + (az * az))) * (180/3.14159);
+	angley = atan(ay / sqrt((ax * ax) + (az * az))) * (180/3.14159);
+	// az = atan(sqrt((ax * ax) + (az * az)) / az) * (180/3.14159);
+	anglez = 0;
 }
 
 void calibrate_gyro() {
@@ -39,29 +58,7 @@ void calibrate_gyro() {
 	setup_angle_vals();
 }
 
-void setup_angle_vals() {
-	uint8_t rdata[6];
-	I2C_ReadMulReg(MPU, 0x3B, 6, rdata);
-	
-	float ax = ((rdata[0] << 8) | rdata[1]);
-	float ay = ((rdata[2] << 8) | rdata[3]);
-	float az = ((rdata[4] << 8) | rdata[5]);
-	
-	anglex = atan(ax / sqrt((ay * ay) + (az * az))) * (180/3.14159);
-	angley = atan(ay / sqrt((ax * ax) + (az * az))) * (180/3.14159);
-	// az = atan(sqrt((ax * ax) + (az * az)) / az) * (180/3.14159);
-	anglez = 0;
-}
-
-float tmp_gx;
-float tmp_gy;
-float tmp_ax;
-float tmp_ay;
-
 void update_MPU_data() { // This takes about 1983 ticks (max)
-	const float GF = 1;
-	const float AF = 1 - GF;
-	
 	uint8_t rdata[14];
 	int16_t mpu[7];
 	
@@ -72,13 +69,12 @@ void update_MPU_data() { // This takes about 1983 ticks (max)
 		mpu[ii] = (rdata[idx] << 8) | rdata[idx + 1];
 	}
 	
-	const float gf = 131.0;
-	float gx_r = (mpu[4] + gxo) / gf;
-	float gy_r = (mpu[5] + gyo) / gf;
-	float gz_r = (mpu[6] + gzo) / gf;
 	float ax_r = mpu[0]; // we dont need to convert to degrees because when
 	float ay_r = mpu[1]; // we divide this later it will cross out
 	float az_r = mpu[2];
+	float gx_r = (mpu[4] + gxo) / gf;
+	float gy_r = (mpu[5] + gyo) / gf;
+	float gz_r = (mpu[6] + gzo) / gf;
 	
 	float gx = anglex + (gx_r * loop_elapsed);
 	float gy = angley + (gy_r * loop_elapsed);
@@ -101,9 +97,4 @@ void update_MPU_data() { // This takes about 1983 ticks (max)
 	anglex = (GF * gx) + (AF * ax);
 	angley = (GF * gy) + (AF * ay);
 	anglez = (GF * gz) + (AF * az);
-	
-	tmp_ax = ax;
-	tmp_ay = ay;
-	tmp_gx = gx;
-	tmp_gy = gy;
 }

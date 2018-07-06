@@ -6,11 +6,10 @@
 
 void setup() {
 	Serial.begin(BAUD_RATE);
-	//Serial.print("\n\n\n\n=");
+	Serial.print("\n\n\n\n");
 	setup_timer();
 	setup_I2C();
 	setup_MPU6050();
-	Serial.print("=");
 	calibrate_gyro();
 }
 
@@ -33,21 +32,8 @@ void loop() {
 	
 	/// ================ PHASE 2 =============================
 	s = TCNT1;
-		//Serial.print(f);
-		//Serial.print('\t');
-		Serial.print(tmp_gx);
-		Serial.print('\t');
-		Serial.print('\t');
-		Serial.print(tmp_ax);
-		Serial.print('\t');
-		Serial.print('\t');
-		Serial.print(tmp_gy);
-		Serial.print('\t');
-		Serial.print('\t');
-		Serial.print(tmp_ay);
-		Serial.println(' ');
 	e = s + PHASE3_TICKS;
 	while (TCNT1 < e);
 	
-	loop_elapsed = (TCNT1 - loop_start) / 2000000.0;
+	loop_elapsed = TCNT1 / 2000000.0;
 }
