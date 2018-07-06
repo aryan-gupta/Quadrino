@@ -51,8 +51,8 @@ MN:	lds r31, %A[_loc] ; MSB
 	rjmp EN
 L2: cpi r30, %B[_bufe]
 	brne EN
-	lds r30, %B[_buf1s]
-	lds r31, %A[_buf1s]
+	ldi r30, %B[_buf1s]
+	ldi r31, %A[_buf1s]
 	sts %B[_loc], r30
 	sts %A[_loc], r31
 	ldi r30, 0x0
