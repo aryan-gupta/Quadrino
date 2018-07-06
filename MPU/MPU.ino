@@ -32,6 +32,18 @@ void loop() {
 	
 	/// ================ PHASE 2 =============================
 	s = TCNT1;
+		//Serial.print(f);
+		//Serial.print('\t');
+		Serial.print(anglex);
+		// Serial.print('\t');
+		// Serial.print(tmp_ax);
+		Serial.print('\t');
+		Serial.print(angley);
+		// Serial.print('\t');
+		// Serial.print(tmp_ay);
+		Serial.print('\t');
+		Serial.print(anglez);
+		Serial.println(' ');
 	e = s + PHASE3_TICKS;
 	while (TCNT1 < e);
 	

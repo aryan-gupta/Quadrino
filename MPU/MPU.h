@@ -1,5 +1,5 @@
 
-const float GF = 0.98;
+const float GF = 0.996;
 const float AF = 1 - GF;
 
 const float gf = 131.0;
@@ -58,6 +58,11 @@ void calibrate_gyro() {
 	setup_angle_vals();
 }
 
+// float tmp_ax;
+// float tmp_ay;
+// float tmp_gx;
+// float tmp_gy;
+
 void update_MPU_data() { // This takes about 1983 ticks (max)
 	uint8_t rdata[14];
 	int16_t mpu[7];
@@ -88,7 +93,7 @@ void update_MPU_data() { // This takes about 1983 ticks (max)
 	
 	float ax = -atan(ay_r / sqrt((ax_r * ax_r) + (az_r * az_r))) * (180/3.14159);
 	float ay =  atan(ax_r / sqrt((ay_r * ay_r) + (az_r * az_r))) * (180/3.14159);
-	float az = 0; // atan(sqrt((ax * ax) + (az * az)) / az) * (180/3.14159);
+	// float az = 0; // atan(sqrt((ax * ax) + (az * az)) / az) * (180/3.14159);
 	
 	if (isnan(ay)) { ay = 0; }
 	if (isnan(ax)) { ax = 0; }
@@ -96,5 +101,10 @@ void update_MPU_data() { // This takes about 1983 ticks (max)
 	
 	anglex = (GF * gx) + (AF * ax);
 	angley = (GF * gy) + (AF * ay);
-	anglez = (GF * gz) + (AF * az);
+	anglez = gz;
+	
+	// tmp_ax = ax;
+	// tmp_ay = ay;
+	// tmp_gx = gx;
+	// tmp_gy = gy;
 }
