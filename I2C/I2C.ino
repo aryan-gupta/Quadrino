@@ -11,11 +11,11 @@ void setup() {
 	int tmp = 0;
 	
 	tmp = I2C_WriteReg(MPU, 0x6B, 0x00);
-	if (tmp != 0) Serial.println(I2C_GetStatus()); 
+	//if (tmp != 0) Serial.println(I2C_GetStatus()); 
 	tmp = I2C_WriteReg(MPU, 0x1B, 0x00);
-	if (tmp != 0) Serial.println(I2C_GetStatus()); 
+	//if (tmp != 0) Serial.println(I2C_GetStatus()); 
 	tmp = I2C_WriteReg(MPU, 0x1C, 0x00);
-	if (tmp != 0) Serial.println(I2C_GetStatus());
+	//if (tmp != 0) Serial.println(I2C_GetStatus());
 	// Serial.println("\nSetup Done");
 }
 
