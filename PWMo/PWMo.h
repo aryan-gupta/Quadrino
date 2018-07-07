@@ -14,12 +14,16 @@ uint8_t escADown = 0, escBDown = 0;
 // https://electronics.stackexchange.com/questions/117430
 // THis link helped me alot and I keep losing the link
 // Finally added it here
+// #define USE_COMP_INLINE_ASM
+#ifdef USE_COMP_INLINE_ASM
 
 ISR(TIMER1_COMPA_vect, ISR_NAKED) {
 	asm volatile (
 		// Setup registers
+		"push r2" "\n\t"
 		"in r2, __SREG__"  "\n\t" // Figure out why we need this
-		
+		"push r4" "\n\t"
+		"push r5" "\n\t"
 		// Set esc pulse to low
 		"in	r4, 0x0b"      "\n\t" // PORTD is address 0x0b
 		"lds r5, %0"       "\n\t" 
@@ -27,7 +31,10 @@ ISR(TIMER1_COMPA_vect, ISR_NAKED) {
 		"out 0x0b, r5"     "\n\t" // (I will figure out later how to soft code it)
 		
 		// Reset registers
+		"pop r5" "\n\t"
+		"pop r4" "\n\t"
 		"out __SREG__, r2" "\n\t"
+		"pop r2" "\n\t"
 		
 		// return
 		"reti"              "\n\t"
@@ -41,7 +48,10 @@ ISR(TIMER1_COMPA_vect, ISR_NAKED) {
 ISR(TIMER1_COMPB_vect, ISR_NAKED) {
 	asm volatile (
 		// Setup registers
+		"push r2" "\n\t"
 		"in r2, __SREG__"  "\n\t" // Figure out why we need this
+		"push r4" "\n\t"
+		"push r5" "\n\t"
 		
 		// Set esc pulse to low
 		"in	r4, 0x0b"      "\n\t" // PORTD is address 0x0b
@@ -50,7 +60,10 @@ ISR(TIMER1_COMPB_vect, ISR_NAKED) {
 		"out 0x0b, r5"     "\n\t" // (I will figure out later how to soft code it)
 		
 		// Reset registers
+		"pop r5" "\n\t"
+		"pop r4" "\n\t"
 		"out __SREG__, r2" "\n\t"
+		"pop r2" "\n\t"
 		
 		// return
 		"reti"              "\n\t"
@@ -62,7 +75,20 @@ ISR(TIMER1_COMPB_vect, ISR_NAKED) {
 
 }
 
-void output_esc_pulse(uint8_t escA, uint16_t ticksA, uint8_t escB, uint16_t ticksB) {
+#else
+	
+ISR(TIMER1_COMPA_vect) {
+	PORTD &= escADown;
+}
+
+ISR(TIMER1_COMPB_vect) {
+	PORTD &= escBDown;
+}
+
+#endif
+
+void 
+output_esc_pulse(uint8_t escA, uint16_t ticksA,uint8_t escB, uint16_t ticksB) {
 	uint16_t ctick = TCNT1 - 4;
 	PORTD |= escA xor escB; // hehe -- pretty much gets which escs ports/pulses are going to be set high
 	
@@ -99,71 +125,55 @@ void finish_esc_pulse() {
 	TIMSK1 &= 0b11111001;
 }
 
-void calibrate_escs() {
-	uint16_t e, s;
+void phase_1(void (*callback)()) {
+	TCNT1 = 0;
+	callback();
+	while (TCNT1 < PHASE1_TICKS);
+}
+
+void phase_2(void (*callback)()) {
+	uint16_t e = TCNT1 + PHASE2_TICKS;
+	output_esc_pulse(ESC_FL_DOWN, escfl, ESC_FR_DOWN, escfr);
+	callback();
+	finish_esc_pulse();
+	while (TCNT1 < e);
+}
+
+void phase_3(void (*callback)()) {
+	uint16_t e = TCNT1 + PHASE3_TICKS;
+	output_esc_pulse(ESC_BL_DOWN, escbl, ESC_BR_DOWN, escbr);
+	callback();
+	finish_esc_pulse();
+	while (TCNT1 < e);
+	
+	loop_elapsed = TCNT1 / 2000000.0;
+}
+
+void do_all_phases(void (*fa)(), void (*fb)(), void (*fc)()) {
+	phase_1(fa);
+	phase_2(fb);
+	phase_3(fc);
+}
+
+void calibrate_escs(void (*fa)(), void (*fb)(), void (*fc)()) {
+	escfl = escfr = escbl = escbr = 4000;
+	do_all_phases(dummy, fa, fb);
 	
 	for (uint16_t ii = 0; ii < 750; ++ii) {
-		s = TCNT1;
-		e = s + PHASE1_TICKS;
-		// Do somthing productive here
-		while (TCNT1 < e);
-		
-		s = TCNT1;
-		output_esc_pulse(ESC_FL_DOWN, 4000, ESC_FR_DOWN, 4000);
-		// Do somthing productive here
-		finish_esc_pulse();
-		e = s + PHASE2_TICKS;
-		while (TCNT1 < e);
-		
-		s = TCNT1;
-		output_esc_pulse(ESC_BL_DOWN, 4000, ESC_BR_DOWN, 4000);
-		// Do somthing productive here
-		finish_esc_pulse();
-		e = s + PHASE3_TICKS;
-		while (TCNT1 < e);
+		do_all_phases(dummy, fc, fc);
 	}
-	// Phase -- P1   >> P2   >> P3
-	// Ticks -- 4500 >> 4500 >> 4500
-	// Int   -- iBus >> ESC1 >> ESC2
-	// Exec  -- iBus >> MPU  >> PID
+	
 	for (uint16_t ii = 4000; ii >= 2000; ii -= 5) {
-		s = TCNT1;
-		e = s + PHASE1_TICKS;
-		while (TCNT1 < e);
-		
-		s = TCNT1;
-		output_esc_pulse(ESC_FL_DOWN, ii, ESC_FR_DOWN, ii);
-		finish_esc_pulse();
-		e = s + PHASE2_TICKS;
-		while (TCNT1 < e);
-		
-		output_esc_pulse(ESC_BL_DOWN, ii, ESC_BR_DOWN, ii);
-		finish_esc_pulse();
-		e = s + PHASE3_TICKS;
-		while (TCNT1 < e);
+		escfl = escfr = escbl = escbr = ii;
+		do_all_phases(dummy, fc, fc);
 	}
 }
 
-void output_empty_pulse() {
-	uint16_t e, s;
+void output_empty_pulse(void (*fa)(), void (*fb)(), void (*fc)()) {
+	escfl = escfr = escbl = escbr = 2000;
+	do_all_phases(fa, fb, fc);
+	
 	for (uint16_t ii = 0; ii < 750; ++ii) {
-		s = TCNT1;
-		e = s + PHASE1_TICKS;
-		// Do somthing productive here
-		while (TCNT1 < e);
-		
-		s = TCNT1;
-		output_esc_pulse(ESC_FL_DOWN, 2000, ESC_FR_DOWN, 2000);
-		// Do somthing productive here
-		finish_esc_pulse();
-		e = s + PHASE2_TICKS;
-		while (TCNT1 < e);
-		
-		s = TCNT1;
-		output_esc_pulse(ESC_BL_DOWN, 2000, ESC_BR_DOWN, 2000);
-		// Do somthing productive here
-		finish_esc_pulse();
-		e = s + PHASE3_TICKS;
-		while (TCNT1 < e);
+		do_all_phases(dummy, dummy, dummy);
 	}
 }
