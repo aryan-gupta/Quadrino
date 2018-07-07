@@ -10,7 +10,11 @@ void setup() {
 	setup_timer();
 	setup_I2C();
 	setup_MPU6050();
-	calibrate_gyro();
+	for (uint16_t ii = 0; ii < 5000; ++ii) {
+		calibrate_gyro();
+	}
+	finish_gyro_cal();
+	setup_angle_vals();
 }
 
 

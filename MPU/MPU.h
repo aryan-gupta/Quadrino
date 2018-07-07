@@ -6,6 +6,9 @@ const float gf = 131.0;
 	
 const uint8_t MPU = 0b1101000;
 
+int64_t gxa = 0, gya = 0, gza = 0;
+uint16_t samples = 0;
+
 float gxo = 0, gyo = 0, gzo = 0;
 float anglex = 0, angley = 0, anglez = 0;
 
@@ -19,43 +22,36 @@ void setup_angle_vals() {
 	uint8_t rdata[6];
 	I2C_ReadMulReg(MPU, 0x3B, 6, rdata);
 	
-	float ax = ((rdata[0] << 8) | rdata[1]);
-	float ay = ((rdata[2] << 8) | rdata[3]);
-	float az = ((rdata[4] << 8) | rdata[5]);
-	
-	anglex = atan(ax / sqrt((ay * ay) + (az * az))) * (180/3.14159);
-	angley = atan(ay / sqrt((ax * ax) + (az * az))) * (180/3.14159);
-	// az = atan(sqrt((ax * ax) + (az * az)) / az) * (180/3.14159);
-	anglez = 0;
+	float ax = (rdata[0] << 8) | rdata[1];
+	float ay = (rdata[2] << 8) | rdata[3];
+	float az = (rdata[4] << 8) | rdata[5];
+	anglex = -atan(ay / sqrt((ax * ax) + (az * az))) * (180/3.14159);
+	angley =  atan(ax / sqrt((ay * ay) + (az * az))) * (180/3.14159);
+	anglez =  0;
 }
 
 void calibrate_gyro() {
-	int64_t gxa, gya, gza;
-	gxa = gya = gza = 0;
-
-	const uint16_t SAMPLES = 5000;
-	for (uint16_t ii = 0; ii < SAMPLES; ++ii) {
-		uint8_t rdata[6];
-		int16_t mpu[3];
-		
-		I2C_ReadMulReg(MPU, 0x43, 6, rdata);
-		
-		for (uint8_t jj = 0; jj < 3; ++jj) {
-			size_t idx = jj * 2;
-			mpu[jj] = (rdata[idx] << 8) | rdata[idx + 1];
-		}
-
-		gxa += mpu[0];
-		gya += mpu[1]; 
-		gza += mpu[2];
+	uint8_t rdata[6];
+	int16_t mpu[3];
+	
+	I2C_ReadMulReg(MPU, 0x43, 6, rdata);
+	
+	for (uint8_t jj = 0; jj < 3; ++jj) {
+		size_t idx = jj * 2;
+		mpu[jj] = (rdata[idx] << 8) | rdata[idx + 1];
 	}
+
+	gxa += mpu[0];
+	gya += mpu[1]; 
+	gza += mpu[2];
 	
-	const float gf = SAMPLES; // * 131.0;
-	gxo = -(gxa / gf);
-	gyo = -(gya / gf);
-	gzo = -(gza / gf);
-	
-	setup_angle_vals();
+	++samples;
+}
+
+void finish_gyro_cal() {
+	gxo = -(gxa / samples);
+	gyo = -(gya / samples);
+	gzo = -(gza / samples);
 }
 
 // float tmp_ax;
