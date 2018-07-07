@@ -43,6 +43,19 @@ void setup_recv(unsigned long baud) {
 	UCSR0B |=  (1 << RXEN0); // enable recv
 	UCSR0B &= ~(1 << UDRIE0); // disable Data Register Empty interrupt
 	UCSR0B &= ~(1 << RXCIE0); // disable interrupt for now
+	UCSR0B &= ~(1 << TXEN0);
+	
+	recv[START   ]  =    0;
+	recv[ROLL    ]  = 1500;
+	recv[PITCH   ]  = 1500;
+	recv[THROTTLE]  = 1000; // throttle should be low
+	recv[YAW     ]  = 1500; // everything else should be 
+	recv[VRA     ]  = 1500; // center stick position
+	recv[VRB     ]  = 1500;
+	recv[SWA     ]  = 1500;
+	recv[SWB     ]  = 1500;
+	recv[SWC     ]  = 1500;
+	recv[SWD     ]  = 1500;
 }
 
 void enable_usart_int() {
@@ -122,18 +135,8 @@ void process_usart_data() {
 	}
 	asm volatile ("out __SREG__, r3" :::"r3");
 	
-	recv[CSUM] = raw[30] + (raw[31] << 8);
-	uint16_t chksum = 0xFFFF;
-	for (uint8_t ii = 0; ii < 30; ii++) {
-		chksum -= raw[ii];
-	}
-	
-	if (chksum != recv[CSUM]) // Error in trans. Use old data
-		return;
-	
 	recv[START] = raw[0] + (raw[1] << 8);
-	
-	if (recv[START   ] != 0x4020) {
+	if (recv[START   ] != 0x4020) { // check if we transmitter is turned on
 		recv[ROLL    ]  = 1500;
 		recv[PITCH   ]  = 1500;
 		recv[THROTTLE]  = 1000; // throttle should be low
@@ -146,6 +149,15 @@ void process_usart_data() {
 		recv[SWD     ]  = 1500;
 		return;
 	}
+	
+	recv[CSUM] = raw[30] + (raw[31] << 8);
+	uint16_t chksum = 0xFFFF;
+	for (uint8_t ii = 0; ii < 30; ii++) {
+		chksum -= raw[ii];
+	}
+	
+	if (chksum != recv[CSUM]) // Error in trans. Use old data
+		return;
 	
 	recv[ROLL    ] = raw[ 2] + (raw[ 3] << 8);
 	recv[PITCH   ] = raw[ 4] + (raw[ 5] << 8);
