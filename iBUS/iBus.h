@@ -42,8 +42,8 @@ void setup_recv(unsigned long baud) {
 	
 	UCSR0B |=  (1 << RXEN0); // enable recv
 	UCSR0B &= ~(1 << UDRIE0); // disable Data Register Empty interrupt
-	UCSR0B &= ~(1 << RXCIE0); // disable interrupt for now
-	UCSR0B &= ~(1 << TXEN0);
+	UCSR0B |=  (1 << RXCIE0); // enable recv ready int
+	//UCSR0B &= ~(1 << TXEN0);
 	
 	recv[START   ]  =    0;
 	recv[ROLL    ]  = 1500;
@@ -56,10 +56,6 @@ void setup_recv(unsigned long baud) {
 	recv[SWB     ]  = 1500;
 	recv[SWC     ]  = 1500;
 	recv[SWD     ]  = 1500;
-}
-
-void enable_usart_int() {
-	UCSR0B |=  (1 << RXCIE0); // enable interrupt
 }
 
 /*
