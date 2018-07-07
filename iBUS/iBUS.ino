@@ -5,8 +5,9 @@
 
 void setup() {
 	Serial.begin(BAUD_RATE);
-	setup_recv(BAUD_RATE);
 	setup_timer();
+	setup_recv(BAUD_RATE);
+	enable_usart_int();
 }
 
 void loop() {
