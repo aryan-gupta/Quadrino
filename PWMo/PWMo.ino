@@ -4,13 +4,17 @@
 #include "PWMo.h"
 #define DEBUG
 
+void dummy() {
+	return;
+}
+
 void setup() {
 	Serial.begin(BAUD_RATE);
 	Serial.print("\n\n\n\n");
 	setup_pins();
 	setup_timer();
-	calibrate_escs();
-	output_empty_pulse();
+	calibrate_escs(dummy, dummy, dummy);
+	output_empty_pulse(dummy, dummy, dummy);
 }
 
 
