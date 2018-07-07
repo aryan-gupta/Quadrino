@@ -10,6 +10,7 @@ void setup() {
 }
 
 void loop() {
+	TCNT1 = 0;
 	uint16_t tmp = TCNT1;
 	process_usart_data();
 	uint16_t el = TCNT1 - tmp;

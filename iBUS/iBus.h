@@ -42,6 +42,10 @@ void setup_recv(unsigned long baud) {
 	
 	UCSR0B |=  (1 << RXEN0); // enable recv
 	UCSR0B &= ~(1 << UDRIE0); // disable Data Register Empty interrupt
+	UCSR0B &= ~(1 << RXCIE0); // disable interrupt for now
+}
+
+void enable_usart_int() {
 	UCSR0B |=  (1 << RXCIE0); // enable interrupt
 }
 
