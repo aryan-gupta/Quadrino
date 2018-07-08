@@ -11,50 +11,175 @@
 // r4 - PWMo.h | ISR(TIMER1_COMPA_vect, ISR_NAKED)
 // r5 - PWMo.h | ISR(TIMER1_COMPA_vect, ISR_NAKED)
 
+void function_a() {
+	setup_I2C();
+}
+
 void setup() {
-	Serial.begin(BAUD_RATE);
-	Serial.print("\n\n\n\n");
+	//Serial.begin(BAUD_RATE);
+	// ================= BASIC SETUP =======================
 	setup_pins();
 	setup_timer();
-	// setup_I2C();
+	//calibrate_escs_fl();
+	//output_empty_pulse_fl();
+	//calibrate_escs(function_a, setup_MPU6050, calibrate_gyro);
+	//output_empty_pulse(enable_usart_int, finish_gyro_cal, setup_angle_vals);
+	// calibrate_escs(dummy, dummy, dummy);
+	// output_empty_pulse(dummy, dummy, dummy);
+	// function_a();
 	// setup_MPU6050();
-	setup_recv(BAUD_RATE);
-	calibrate_escs();
-	output_empty_pulse();
+	// for (uint16_t ii = 0; ii < 5000; ++ii) {
+		// calibrate_gyro();
+	// }
+	// finish_gyro_cal();
+	// setup_angle_vals();
+	//enable_usart_int();
+	// ================= Calibration =====================
+	escfl = escfr = escbl = escbr = 4000;
+	do_all_phases(setup_I2C, setup_MPU6050, calibrate_gyro);
+	for (uint16_t ii = 0; ii < 750; ++ii) {
+		do_all_phases(dummy, calibrate_gyro, calibrate_gyro);
+	}
+	for (uint16_t ii = 4000; ii >= 2000; ii -= 5) {
+		escfl = escfr = escbl = escbr = ii;
+		do_all_phases(dummy, calibrate_gyro, calibrate_gyro);
+	}
+	escfl = escfr = escbl = escbr = 2000;
+	do_all_phases(dummy, finish_gyro_cal, setup_angle_vals);
+	do_all_phases(dummy, dummy, []() { setup_recv(BAUD_RATE); });
+	for (uint16_t ii = 0; ii < 750; ++ii) {
+		do_all_phases(dummy, dummy, dummy);
+	}
+}
+
+void loop_phase1() {
+	process_usart_data();
+	
+	if (recv[THROTTLE] < 1000) 
+		recv[THROTTLE] = 1000;
+	else if (recv[THROTTLE] > 2000)
+		recv[THROTTLE] = 2000;
+	
+	escfl = escfr = escbl = escbr = recv[THROTTLE] * 2;
 }
 
 void loop() {
-	// Phase -- P1   >> P2   >> P3
-	// Ticks -- 4500 >> 4500 >> 4500
-	// Int   -- iBus >> ESC1 >> ESC2
-	// Exec  -- iBus >> MPU  >> PID
+	do_all_phases(loop_phase1, update_MPU_data, update_pid_calc);
+}
+
+void calibrate_escs_fl() {
+	uint16_t e, s;
 	TCNT1 = 0;
-	uint16_t loop_start = TCNT1, s, e;
 	
-	/// ================ PHASE 1 =============================
 	s = TCNT1;
-		process_usart_data();
-		mix_channels();
 	e = s + PHASE1_TICKS;
 	while (TCNT1 < e);
 	
-	/// ================ PHASE 2 =============================
 	s = TCNT1;
-		output_esc_pulse(ESC_FL_DOWN, escfl, ESC_FR_DOWN, escfr);
-			update_MPU_data();
+		output_esc_pulse(ESC_FL_DOWN, 4000, ESC_FR_DOWN, 4000);
+			setup_recv(BAUD_RATE);
+			setup_I2C();
 		finish_esc_pulse();
 	e = s + PHASE2_TICKS;
 	while (TCNT1 < e);
 	
-	/// ================ PHASE 2 =============================
 	s = TCNT1;
-		output_esc_pulse(ESC_BL_DOWN, escbl, ESC_BR_DOWN, escbr);
-			//update_pid_calc();
+	// Serial.println(s);
+		output_esc_pulse(ESC_BL_DOWN, 4000, ESC_BR_DOWN, 4000);
+			setup_MPU6050();
+		finish_esc_pulse();
+	// Serial.println(TCNT1);
+	e = s + PHASE3_TICKS;
+	while (TCNT1 < e);
+	
+	for (uint16_t ii = 0; ii < 750; ++ii) {
+		TCNT1 = 0;
+		s = TCNT1;
+		e = s + PHASE1_TICKS;
+		while (TCNT1 < e);
+		
+		s = TCNT1;
+			output_esc_pulse(ESC_FL_DOWN, 4000, ESC_FR_DOWN, 4000);
+				calibrate_gyro();
+			finish_esc_pulse();
+		e = s + PHASE2_TICKS;
+		while (TCNT1 < e);
+		
+		s = TCNT1;
+			output_esc_pulse(ESC_BL_DOWN, 4000, ESC_BR_DOWN, 4000);
+				calibrate_gyro();
+			finish_esc_pulse();
+		e = s + PHASE3_TICKS;
+		while (TCNT1 < e);
+	}
+	
+	for (uint16_t ii = 4000; ii >= 2000; ii -= 5) {
+		TCNT1 = 0;
+		s = TCNT1;
+		e = s + PHASE1_TICKS;
+		while (TCNT1 < e);
+		
+		s = TCNT1;
+			output_esc_pulse(ESC_FL_DOWN, ii, ESC_FR_DOWN, ii);
+				//fc();
+			finish_esc_pulse();
+		e = s + PHASE2_TICKS;
+		while (TCNT1 < e);
+		
+		s = TCNT1;
+			output_esc_pulse(ESC_BL_DOWN, ii, ESC_BR_DOWN, ii);
+				//fc();
+			finish_esc_pulse();
+		e = s + PHASE3_TICKS;
+		while (TCNT1 < e);
+	}
+}
+
+void output_empty_pulse_fl() {
+	uint16_t e, s;
+	TCNT1 = 0;
+	
+	s = TCNT1;
+		//enable_usart_int();
+	e = s + PHASE1_TICKS;
+	while (TCNT1 < e);
+	
+	s = TCNT1;
+		output_esc_pulse(ESC_FL_DOWN, 2000, ESC_FR_DOWN, 2000);
+			finish_gyro_cal();
+		finish_esc_pulse();
+	e = s + PHASE2_TICKS;
+	while (TCNT1 < e);
+	
+	s = TCNT1;
+		output_esc_pulse(ESC_BL_DOWN, 2000, ESC_BR_DOWN, 2000);
+			setup_angle_vals();
 		finish_esc_pulse();
 	e = s + PHASE3_TICKS;
 	while (TCNT1 < e);
 	
-	loop_elapsed = TCNT1 / 2000000.0;
+	for (uint16_t ii = 0; ii < 750; ++ii) {
+		TCNT1 = 0;
+		
+		s = TCNT1;
+		e = s + PHASE1_TICKS;
+		// Do somthing productive here
+		while (TCNT1 < e);
+		
+		s = TCNT1;
+		output_esc_pulse(ESC_FL_DOWN, 2000, ESC_FR_DOWN, 2000);
+		// Do somthing productive here
+		finish_esc_pulse();
+		e = s + PHASE2_TICKS;
+		while (TCNT1 < e);
+		
+		s = TCNT1;
+		output_esc_pulse(ESC_BL_DOWN, 2000, ESC_BR_DOWN, 2000);
+		// Do somthing productive here
+		finish_esc_pulse();
+		e = s + PHASE3_TICKS;
+		while (TCNT1 < e);
+	}
 }
 
 // Im keeping this here now, will be moved later

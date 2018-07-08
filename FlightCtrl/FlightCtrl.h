@@ -4,9 +4,9 @@ const uint16_t PHASE3_TICKS = 4000 + 50;
 
 const unsigned long BAUD_RATE = 115200;
 
-const float KP = 1;
-const float KI = 1;
-const float KD = 1;
+const float KP = 1.3;
+const float KI = 0.05;
+const float KD = 15;
 
 enum RECV_CHANNELS : uint8_t {
 	START,
@@ -60,4 +60,8 @@ void setup_timer() {
 void setup_pins() {
 	// setup output pins
 	DDRD |= 0b11110000; // set pins 4:7 as output
+}
+
+void dummy() {
+	return;
 }
