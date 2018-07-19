@@ -61,6 +61,7 @@ Please see Licence.md file for more information
 
 ## Acknowledgments
 * Thank you [Joop Brokking](http://http://www.brokking.net)
+* Thank you Michael Ajazi for typing a 3
 * Thanks for all my friends that gave me inspiration and ideas
 * Thanks to anyone else that may have slipped my mind
 
