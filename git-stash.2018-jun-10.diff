@@ -1,0 +1,200 @@
+diff --git a/FlightCtrl/FlightCtrl.ino b/FlightCtrl/FlightCtrl.ino
+index 2e540cf..a400388 100644
+--- a/FlightCtrl/FlightCtrl.ino
++++ b/FlightCtrl/FlightCtrl.ino
+@@ -149,48 +149,84 @@ ISR(PCINT0_vect) {
+ 	uint32_t tmp = get_ticks(); // this is a 16bit value
+ 	
+ 	// Channel 1 ========================
+-	if (PINB & 0b01) {
+-		if (ch1 == 0) {
+-			ch1 = 1;
+-			timer1 = tmp;
+-		}
+-	} else if (ch1 == 1) {
++	if (ch1 == 0 and PINB & 0b01) {
++		ch1 = 1;
++		timer1 = tmp;
++	} else if (ch1 == 1 and !(PINB & 0b01)) {
+ 		ch1 = 0;
+ 		recv_ch1 = tmp - timer1;
+ 	}
+ 	
+ 	// Channel 2 ========================
+-	if (PINB & 0b10) {
+-		if (ch2 == 0) {
+-			ch2 = 1;
+-			timer2 = tmp;
+-		}
+-	} else if (ch2 == 1) {
+-		ch2 = 0;
++	if (ch2 == 0 and PINB & 0b010) {
++		ch2 = 1;
++		timer2 = tmp;
++	} else if (ch2 == 1 and !(PINB & 0b010)) {
+ 		recv_ch2 = tmp - timer2;
++		ch2 = 0;
+ 	}
+-	
++
+ 	// Channel 3 ========================
+-	if (PINB & 0b100) {
+-		if (ch3 == 0) {
+-			ch3 = 1;
+-			timer3 = tmp;
+-		}
+-	} else if (ch3 == 1) {
+-		ch3 = 0;
++	if (ch3 == 0 and PINB & 0b0100) {
++		ch3 = 1;
++		timer3 = tmp;
++	} else if (ch3 == 1 and !(PINB & 0b0100)) {
+ 		recv_ch3 = tmp - timer3;
++		ch3 = 0;
+ 	}
+-	
++
+ 	// Channel 4 ========================
+-	if (PINB & 0b1000) {
+-		if (ch4 == 0) {
+-			ch4 = 1;
+-			timer4 = tmp;
+-		}
+-	} else if (ch4 == 1) {
+-		ch4 = 0;
++	if (ch4 == 0 and PINB & 0b01000) {
++		ch4 = 1;
++		timer4 = tmp;
++	} else if (ch4 == 1 and !(PINB & 0b01000)) {
+ 		recv_ch4 = tmp - timer4;
++		ch4 = 0;
+ 	}
++	
++	// // Channel 1 ========================
++	// if (PINB & 0b01) {
++		// if (ch1 == 0) {
++			// ch1 = 1;
++			// timer1 = tmp;
++		// }
++	// } else if (ch1 == 1) {
++		// ch1 = 0;
++		// recv_ch1 = tmp - timer1;
++	// }
++	
++	// // Channel 2 ========================
++	// if (PINB & 0b10) {
++		// if (ch2 == 0) {
++			// ch2 = 1;
++			// timer2 = tmp;
++		// }
++	// } else if (ch2 == 1) {
++		// ch2 = 0;
++		// recv_ch2 = tmp - timer2;
++	// }
++	
++	// // Channel 3 ========================
++	// if (PINB & 0b100) {
++		// if (ch3 == 0) {
++			// ch3 = 1;
++			// timer3 = tmp;
++		// }
++	// } else if (ch3 == 1) {
++		// ch3 = 0;
++		// recv_ch3 = tmp - timer3;
++	// }
++	
++	// // Channel 4 ========================
++	// if (PINB & 0b1000) {
++		// if (ch4 == 0) {
++			// ch4 = 1;
++			// timer4 = tmp;
++		// }
++	// } else if (ch4 == 1) {
++		// ch4 = 0;
++		// recv_ch4 = tmp - timer4;
++	// }
+ }
+ 
+ inline uint32_t get_ticks() {
+@@ -337,14 +373,14 @@ void update_MPU_data() {
+ }
+ 
+ void serial_print_all() {
+-	// Serial.print(recv_ch1);
+-	// Serial.print('\t');
+-	// Serial.print(recv_ch2);
+-	// Serial.print('\t'); 
+-	// Serial.print(recv_ch3);
+-	// Serial.print('\t');
+-	// Serial.print(recv_ch4);
+-	// Serial.print('\t');
++	Serial.print(recv_ch1);
++	Serial.print('\t');
++	Serial.print(recv_ch2);
++	Serial.print('\t'); 
++	Serial.print(recv_ch3);
++	Serial.print('\t');
++	Serial.print(recv_ch4);
++	Serial.print('\t');
+ 	
+ 	// // Serial.print(elapse);
+ 	// Serial.print('\t');
+@@ -362,12 +398,12 @@ void serial_print_all() {
+ 	// Serial.print(az);
+ 	// Serial.print('\t');
+ 	
+-	Serial.print(anglex);
+-	Serial.print('\t');
+-	Serial.print(angley);
+-	Serial.print('\t');
+-	Serial.print(anglez);
+-	Serial.print('\t');
++	// Serial.print(anglex);
++	// Serial.print('\t');
++	// Serial.print(angley);
++	// Serial.print('\t');
++	// Serial.print(anglez);
++	// Serial.print('\t');
+ 	
+ 	Serial.println(' ');
+ }
+@@ -445,10 +481,10 @@ void start_esc_pulse() {
+ 	
+ 	//// @TODO battery calculations
+ 	
+-	// escfr = 3000; // D4
+-	// escfl = 3100; // D5 
+-	// escbr = 3200; // D6
+-	// escbl = 3300; // D7
++	escfr = 3000; // D4
++	escfl = 3000; // D5 
++	escbr = 3000; // D6
++	escbl = 3000; // D7
+ 	
+ 	// we dont want to turn off any of the props
+ 	if (escfr < 2050) escfr = 2050;
+@@ -507,16 +543,21 @@ void finish_esc_pulse() {
+ }
+ 
+ void loop() {
++	TCNT1 = 0;
+ 	uint32_t loop_start = get_ticks();
+ 	
+-	update_pid_calc();
++	// update_pid_calc();
+ 	start_esc_pulse();
+-	update_MPU_data();
++	// update_MPU_data();
+ 	finish_esc_pulse();
+ 	serial_print_all();
+ 	// Serial.println(get_ticks() - loop_start);
+ 	// Serial.println(cnt);
++	// uint32_t ct = get_ticks() + 5000;
++	// while (get_ticks() < ct);
++	
++	while (get_ticks() < loop_start + 12050);
+ 	
+-	loop_elapsed = (get_ticks() - loop_start) / 2000000.0;
++	// loop_elapsed = (get_ticks() - loop_start) / 2000000.0;
+ }
+ 

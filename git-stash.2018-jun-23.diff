@@ -1,0 +1,384 @@
+diff --git a/FlightCtrl/FlightCtrl.ino b/FlightCtrl/FlightCtrl.ino
+index ce3857e..72c1f20 100644
+--- a/FlightCtrl/FlightCtrl.ino
++++ b/FlightCtrl/FlightCtrl.ino
+@@ -6,9 +6,13 @@
+ 
+ // https://www.youtube.com/watch?v=IdL0_ZJ7V2s
+ 
+-#include <../I2C/I2C.ino>
+-#include <../PWMi/PWMi.ino>
+-#include <../PWMo/PWMo.ino>
++#include "C:/Users/Aryan/Projects/Quadrino/I2C/I2C.h"
++#include "C:/Users/Aryan/Projects/Quadrino/iBus/iBus.h"
++#include "C:/Users/Aryan/Projects/Quadrino/PWMo/PWMo.h"
++
++const uint16_t PHASE1_TICKS = 100;
++const uint16_t PHASE2_TICKS = 4000 + 50;
++const uint16_t PHASE3_TICKS = 4000 + 50;
+ 
+ const float KP = 0;
+ const float KI = 0;
+@@ -17,120 +21,79 @@ const float KD = 0;
+ float pid_i_roll = 0, pid_i_pitch = 0, pid_i_yaw = 0;
+ float prev_roll_error = 0, prev_pitch_error = 0, prev_yaw_error = 0;
+ 
+-bool ch1 = 0, ch2 = 0, ch3 = 0, ch4 = 0;
+-uint16_t recv_ch1 = 0, recv_ch2 = 0, recv_ch3 = 0, recv_ch4;
+-uint32_t timer1 = 0, timer2 = 0, timer3 = 0, timer4 = 0;
+-
+ float gxo = 0, gyo = 0, gzo = 0;
+ float anglex = 0, angley = 0, anglez = 0;
+ 
+ float pid_roll = 0, pid_pitch = 0, pid_yaw = 0;
+ 
+-uint16_t escfr_tick = 0, escfl_tick = 0, escbr_tick = 0, escbl_tick = 0;
+-uint16_t cmpAother = 0, cmpBother = 0;
+-
+-uint16_t T1_MSB = 0;
+-uint32_t loop_timer_prev = 0;
+ float loop_elapsed = 0;
+ 
+-uint32_t cnt = 0;
+ 
+-uint16_t get_elapse(uint16_t start, uint16_t end) {
+-	if (end < start) {
+-		return (0xFFFF - end) + start;
+-	} else {
+-		return end - start;
+-	}
+-}
+-
+-ISR(TIMER1_COMPA_vect) {
+-	uint16_t ticks = TCNT1;
+-	
+-	if (get_elapse(escfl_tick, ticks) < 10) {
+-		PORTD &= 0b11011111;
+-		OCR1A = cmpAother;
+-	}
+-	
+-	if (get_elapse(escfr_tick, ticks) < 10) {
+-		PORTD &= 0b11101111;
+-		OCR1A = cmpAother;
+-	}
++void setup() {
++#ifdef DEBUG
++	Serial.begin(115200);
++	Serial.print("\n\n\n\n");
++#endif
++	setup_pins();
++	setup_timer();
++	setup_I2C();
++	setup_MPU6050();
++	setup_int();
+ 	
+-	if ((PORTD & 0b00110000) == 0) { // if both are low then turn off this inturupt
+-		TIMSK1 &= 0b11111101;
+-	}
++	//calibrate_gyro();
+ 	
+-	cnt = get_elapse(ticks, TCNT1);
+-}
++	// for (uint16_t ii = 0; ii < 5000; ++ii) {
++		// uint32_t e = get_ticks() + 10000;
++		// output_set_esc_pulse(4000);
++		// finish_esc_pulse();
++		// while (get_ticks() < e);
++	// }
+ 
+-ISR(TIMER1_COMPB_vect) {
+-	uint32_t ticks = get_ticks(); // run a profiler on this
+-	if (escbl_tick <= ticks) {
+-		PORTD &= 0b01111111;
+-		OCR1B = cmpBother;
+-	}
+-	
+-	if (escbr_tick <= ticks) {
+-		PORTD &= 0b10111111;
+-		OCR1B = cmpBother;
++	for (uint16_t ii = 0; ii < 1000; ++ii) {
++		uint32_t e = get_ticks() + 10000;
++		output_set_esc_pulse(2000);
++		finish_esc_pulse();
++		while (get_ticks() < e);
+ 	}
+ 	
+-	if ((PORTD & 0b11000000) == 0) { // if both are low then turn off this inturupt
+-		TIMSK1 &= 0b11111011;
+-	}
+-}
+-
+-ISR(TIMER1_OVF_vect) {
+-	++T1_MSB;
+-	TIFR1 &= 0b11111110; // turn off the ov flag
++	// for (uint16_t ii = 0; ii < 100000; ++ii) {
++		// uint32_t e = get_ticks() + 10000;
++		// output_set_esc_pulse(3000);
++		// finish_esc_pulse();
++		// while (get_ticks() < e);
++	// }
+ }
+ 
+-ISR(PCINT0_vect) {
+-	// https://electronics.stackexchange.com/questions/120654/interrupt-management-large-avr-projects
+-	// Inturupts while in the ISR wont be skipped as long as it isnt
+-	// the same inturupt
+-	
+-	uint32_t tmp = get_ticks(); // this is a 16bit value
+-	
+-	// Channel 1 ========================
+-	if (ch1 == 0 and PINB & 0b01) {
+-		ch1 = 1;
+-		timer1 = tmp;
+-	} else if (ch1 == 1 and !(PINB & 0b01)) {
+-		ch1 = 0;
+-		recv_ch1 = tmp - timer1;
+-	}
++void loop() {
++	// Phase -- P1   >> P2   >> P3
++	// Ticks -- 4500 >> 4500 >> 4500
++	// Int   -- iBus >> ESC1 >> ESC2
++	// Exec  -- iBus >> MPU  >> PID
++	uint16_t loop_start = TCNT1, s, e;
++	
++	/// ================ PHASE 1 =============================
++	s = TCNT1;
++	e = s + PHASE1_TICKS;
++		process_usart_data();
++	while (TCNT1 < e);
++	
++	/// ================ PHASE 2 =============================
++	s = TCNT1;
++	e = s + PHASE2_TICKS;
++	output_esc_pulse(ESC_FL_DOWN, escfl, ESC_FR_DOWN, escfr);
++		update_MPU_data();
++	finish_esc_pulse();
++	while (TCNT1 < e);
+ 	
+-	// Channel 2 ========================
+-	if (ch2 == 0 and PINB & 0b010) {
+-		ch2 = 1;
+-		timer2 = tmp;
+-	} else if (ch2 == 1 and !(PINB & 0b010)) {
+-		recv_ch2 = tmp - timer2;
+-		ch2 = 0;
+-	}
+-
+-	// Channel 3 ========================
+-	if (ch3 == 0 and PINB & 0b0100) {
+-		ch3 = 1;
+-		timer3 = tmp;
+-	} else if (ch3 == 1 and !(PINB & 0b0100)) {
+-		recv_ch3 = tmp - timer3;
+-		ch3 = 0;
+-	}
+-
+-	// Channel 4 ========================
+-	if (ch4 == 0 and PINB & 0b01000) {
+-		ch4 = 1;
+-		timer4 = tmp;
+-	} else if (ch4 == 1 and !(PINB & 0b01000)) {
+-		recv_ch4 = tmp - timer4;
+-		ch4 = 0;
+-	}
+-}
+-
+-uint32_t get_ticks() {
+-	return (uint32_t(T1_MSB) << 16) | TCNT1;
++	/// ================ PHASE 2 =============================
++	s = TCNT1;
++	output_esc_pulse(ESC_BL_DOWN, escbl, ESC_BR_DOWN, escbr);
++		update_pid_calc();
++	finish_esc_pulse();
++	e = s + PHASE3_TICKS;
++	while (TCNT1 < e);
++	
++	loop_elapsed = (TCNT1 - loop_start) / 2000000.0;
+ }
+ 
+ void setup_MPU6050() {
+@@ -203,41 +166,6 @@ void setup_pins() {
+ 	DDRD |= 0b11110000; // set pins 4:7 as output
+ }
+ 
+-void setup() {
+-#ifdef DEBUG
+-	Serial.begin(9600);
+-	Serial.print("\n\n\n\n");
+-#endif
+-	setup_pins();
+-	setup_timer();
+-	setup_I2C();
+-	//setup_MPU6050();
+-	setup_int();
+-	
+-	//calibrate_gyro();
+-	
+-	// for (uint16_t ii = 0; ii < 5000; ++ii) {
+-		// uint32_t e = get_ticks() + 10000;
+-		// output_set_esc_pulse(4000);
+-		// finish_esc_pulse();
+-		// while (get_ticks() < e);
+-	// }
+-
+-	for (uint16_t ii = 0; ii < 1000; ++ii) {
+-		uint32_t e = get_ticks() + 10000;
+-		output_set_esc_pulse(2000);
+-		finish_esc_pulse();
+-		while (get_ticks() < e);
+-	}
+-	
+-	// for (uint16_t ii = 0; ii < 100000; ++ii) {
+-		// uint32_t e = get_ticks() + 10000;
+-		// output_set_esc_pulse(3000);
+-		// finish_esc_pulse();
+-		// while (get_ticks() < e);
+-	// }
+-}
+-
+ void update_MPU_data() {
+ 	const float AF = 0.4;
+ 	const float OVF = 0.8;
+@@ -369,142 +297,3 @@ void update_pid_calc() {
+ 	
+ 	prev_yaw_error = error;
+ }
+-
+-void output_set_esc_pulse(uint16_t us) {
+-	uint16_t escfr = us;
+-	uint16_t escfl = us;
+-	uint16_t escbr = us;
+-	uint16_t escbl = us;
+-	
+-	uint32_t curTime = get_ticks();
+-	PORTD |= 0b11110000;
+-	escfr_tick = escfr + curTime;
+-	escfl_tick = escfl + curTime;
+-	escbr_tick = escbr + curTime;
+-	escbl_tick = escbl + curTime;
+-	
+-	// The 16bit timer will loop back every 0.0327 seconds
+-	// (16M / 8) / 2^16 = overflows per second
+-	// There are 16 million ticks per second, the prescaler is 8
+-	// so there will be 2 million counts every second. this divided by 
+-	// the max timer1 is overflows per second
+-	
+-	// Compare A will handle the front l/r escs
+-	if (escfr_tick < escfl_tick) {
+-		cmpAother = escfl_tick;
+-		OCR1A     = escfr_tick; // We want the lower 16bits
+-	} else {
+-		cmpAother = escfr_tick;
+-		OCR1A     = escfl_tick; // We want the lower 16bits
+-	}
+-	
+-	// Compare B will hangle the back l/r escs
+-	if (escbr_tick < escbl_tick) {
+-		cmpBother = escbl_tick;
+-		OCR1B     = escbr_tick; // We want the lower 16bits
+-	} else {
+-		cmpBother = escbr_tick;
+-		OCR1B     = escbl_tick; // We want the lower 16bits
+-	}
+-	
+-	// We want to enable compare interupt here
+-	TIFR1 &= 0b11111001;
+-	TIMSK1 |= 0b110;
+-}
+-
+-void start_esc_pulse() {
+-	uint16_t throttle = recv_ch4;
+-	if (throttle > 3900) throttle = 3900; // we want a little it of leeway so our PID calculation
+-	// can still work
+-	
+-	// roll is calulated by left/right escs
+-	// pitch is calculate by the front/back escs
+-	// yaw is controlled by the CW/CCW escs
+-	uint32_t escfr = throttle + pid_roll - pid_pitch - pid_yaw; // (front right CCW)
+-	uint32_t escfl = throttle - pid_roll - pid_pitch + pid_yaw; // (font left CW)
+-	uint32_t escbr = throttle + pid_roll + pid_pitch + pid_yaw; // (back right CW)
+-	uint32_t escbl = throttle - pid_roll + pid_pitch - pid_yaw; // (back left CCW)
+-	
+-	//// @TODO battery calculations
+-	
+-	// we dont want to turn off any of the props
+-	if (escfr < 2050) escfr = 2050;
+-	if (escfl < 2050) escfr = 2050;
+-	if (escbr < 2050) escfr = 2050;
+-	if (escbl < 2050) escfr = 2050;
+-	
+-	// we also want to make sure that we dont esceed the PWM output limit
+-	if (escfr > 4000) escfr = 2050;
+-	if (escfl > 4000) escfr = 2050;
+-	if (escbr > 4000) escfr = 2050;
+-	if (escbl > 4000) escfr = 2050;
+-	
+-	// escfr = 3100;
+-	// escfl = 3100;
+-	// escbr = 3100;
+-	// escbl = 3100;
+-	
+-	escfr = recv_ch1;
+-	escfl = recv_ch2;
+-	escbr = recv_ch3;
+-	escbl = recv_ch4;
+-	
+-	uint32_t curTime = get_ticks();
+-	PORTD |= 0b11110000;
+-	escfr_tick = escfr + curTime;
+-	escfl_tick = escfl + curTime;
+-	escbr_tick = escbr + curTime;
+-	escbl_tick = escbl + curTime;
+-	
+-	// The 16bit timer will loop back every 0.0327 seconds
+-	// (16M / 8) / 2^16 = overflows per second
+-	// There are 16 million ticks per second, the prescaler is 8
+-	// so there will be 2 million counts every second. this divided by 
+-	// the max timer1 is overflows per second
+-	
+-	// Compare A will handle the front l/r escs
+-	if (escfr_tick < escfl_tick) {
+-		cmpAother = escfl_tick;
+-		OCR1A     = escfr_tick; // We want the lower 16bits
+-	} else {
+-		cmpAother = escfr_tick;
+-		OCR1A     = escfl_tick; // We want the lower 16bits
+-	}
+-	
+-	// Compare B will hangle the back l/r escs
+-	if (escbr_tick < escbl_tick) {
+-		cmpBother = escbl_tick;
+-		OCR1B     = escbr_tick; // We want the lower 16bits
+-	} else {
+-		cmpBother = escbr_tick;
+-		OCR1B     = escbl_tick; // We want the lower 16bits
+-	}
+-	
+-	// We want to enable compare interupt here
+-	TIFR1 &= 0b11111001;
+-	TIMSK1 |= 0b110;
+-}
+-
+-void finish_esc_pulse() {
+-	while (PORTD >= 16); // wait for thhe signals to finish sending
+-	
+-	// We want to turn off the compare inturupt in case 
+-	// we loop back and hit it in while doing somthing else
+-	TIMSK1 &= 0b11111001;
+-}
+-
+-void loop() {
+-	uint32_t loop_start = get_ticks();
+-	
+-	// update_pid_calc();
+-	start_esc_pulse();
+-	// update_MPU_data();
+-	finish_esc_pulse();
+-	// Serial.println(get_ticks() - loop_start);
+-	// Serial.println(cnt);
+-	
+-	while (get_ticks() < loop_start + 10000);
+-	
+-	loop_elapsed = (get_ticks() - loop_start) / 2000000.0;
+-}
+-
